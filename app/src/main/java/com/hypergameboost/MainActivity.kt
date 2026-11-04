@@ -4,10 +4,12 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import android.hardware.display.DisplayManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
@@ -34,6 +35,27 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            content()
+        }
+    }
+}
+
+@Composable
+fun OnOff(label: String, enabled: Boolean, onOn: () -> Unit, onOff: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = enabled, onClick = onOn) { Text("ON") }
+            OutlinedButton(enabled = enabled, onClick = onOff) { Text("OFF") }
+        }
+    }
+}
+
+@Composable
 fun App() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -45,8 +67,10 @@ fun App() {
     var busy by remember { mutableStateOf(false) }
     var dpiText by remember { mutableStateOf("") }
     var stats by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf(0) }
+    var ds by remember { mutableStateOf("0.7") }
+    var fps by remember { mutableStateOf(120) }
 
-    // Shizuku listeners
     DisposableEffect(Unit) {
         val l = Shizuku.OnRequestPermissionResultListener { _, _ -> shizuku = ShizukuState.current() }
         val b = Shizuku.OnBinderReceivedListener { shizuku = ShizukuState.current() }
@@ -61,7 +85,6 @@ fun App() {
         }
     }
 
-    // Installed games
     LaunchedEffect(shizuku) {
         if (shizuku == ShizukuState.READY) {
             games = Actions.installedGames()
@@ -69,10 +92,9 @@ fun App() {
         }
     }
 
-    // Live monitor (har 2 second)
     LaunchedEffect(Unit) {
         while (true) {
-            stats = readStats(ctx)
+            stats = try { readStats(ctx) } catch (e: Throwable) { "Monitor error: ${e.message}" }
             delay(2000)
         }
     }
@@ -87,143 +109,138 @@ fun App() {
     }
 
     val ready = shizuku == ShizukuState.READY
+    val can = ready && !busy
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("HyperGameBooster", style = MaterialTheme.typography.headlineSmall)
-
-        // --- Shizuku status ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                when (shizuku) {
-                    ShizukuState.NOT_RUNNING -> Text("Shizuku chal nahi raha. Pehle Shizuku app kholkar start karein.")
-                    ShizukuState.NO_PERMISSION -> {
-                        Text("Shizuku chal raha hai, permission chahiye.")
-                        Button(onClick = { Shizuku.requestPermission(1001) }) { Text("Permission dein") }
-                    }
-                    else -> Text("Shizuku: tayyar")
-                }
-                OutlinedButton(onClick = { shizuku = ShizukuState.current() }) { Text("Dobara check") }
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("HyperGameBooster", style = MaterialTheme.typography.headlineSmall)
+            when (shizuku) {
+                ShizukuState.NOT_RUNNING -> Text("Shizuku chal nahi raha. Pehle Shizuku app se start karein.")
+                ShizukuState.NO_PERMISSION -> Button(onClick = { Shizuku.requestPermission(1001) }) { Text("Shizuku permission dein") }
+                else -> Text("Shizuku: tayyar")
             }
-        }
-
-        // --- Monitor ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp)) {
-                Text("Monitor", style = MaterialTheme.typography.titleMedium)
-                Text(stats)
-            }
-        }
-
-        // --- Game select ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Game", style = MaterialTheme.typography.titleMedium)
-                val list = if (games.isEmpty()) Games.known.keys.toList() else games
+            val list = if (games.isEmpty()) Games.known.keys.toList() else games
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 list.forEach { pkg ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = selected == pkg, onClick = { selected = pkg })
-                        Text(Games.known[pkg] ?: pkg)
-                    }
+                    FilterChip(selected = selected == pkg, onClick = { selected = pkg }, label = { Text(Games.known[pkg] ?: pkg) })
                 }
-                if (games.isEmpty() && ready) Text("Koi supported game install nahi mila.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
-        // --- Profiles ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Game Profile", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = ready && !busy, onClick = { run { Actions.applyProfile(Profile.PERFORMANCE, selected) } }) { Text("Performance") }
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.applyProfile(Profile.BALANCED, selected) } }) { Text("Balanced") }
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.applyProfile(Profile.BATTERY_SAVER, selected) } }) { Text("Battery") }
-                }
-                Button(
-                    enabled = ready && !busy,
-                    onClick = {
-                        run {
-                            val a = Actions.applyProfile(Profile.PERFORMANCE, selected)
-                            val c = Actions.cleanRam(emptySet(), ctx.packageName)
-                            val l = Actions.launch(selected)
-                            "$a\n\n$c\n\n$l"
+        TabRow(selectedTabIndex = tab) {
+            listOf("Dashboard", "GFX", "Input", "Restore").forEachIndexed { i, t ->
+                Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) })
+            }
+        }
+
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            when (tab) {
+                0 -> {
+                    Section("Monitor") {
+                        Text(stats)
+                        OutlinedButton(enabled = can, onClick = { run { Actions.thermalInfo() } }) { Text("Thermal headroom check") }
+                    }
+                    Section("1-Tap Boost") {
+                        Button(enabled = can, onClick = { run { Actions.esportsMode(selected, ctx.packageName) } }) { Text("ACTIVATE ESPORTS MODE") }
+                        Text("Thermal override + 120Hz + Performance + DND + Wi-Fi low latency + keep-alive + RAM clean", style = MaterialTheme.typography.bodySmall)
+                        Button(enabled = can, onClick = {
+                            run {
+                                val a = Actions.esportsMode(selected, ctx.packageName)
+                                val l = Actions.launch(selected)
+                                "$a\n\n$l"
+                            }
+                        }) { Text("Esports Mode + Game Start") }
+                    }
+                    Section("Game Profile") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(enabled = can, onClick = { run { Actions.applyProfile(Profile.PERFORMANCE, selected) } }) { Text("Performance") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.applyProfile(Profile.BALANCED, selected) } }) { Text("Balanced") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.applyProfile(Profile.BATTERY_SAVER, selected) } }) { Text("Battery") }
                         }
                     }
-                ) { Text("Boost + Game Start") }
-            }
-        }
-
-        // --- Cleaning ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Safai", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.cleanRam(emptySet(), ctx.packageName) } }) { Text("RAM clean") }
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.trimCaches() } }) { Text("Cache clean") }
+                    Section("Safai") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = can, onClick = { run { Actions.cleanRam(emptySet(), ctx.packageName) } }) { Text("RAM clean") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.trimCaches() } }) { Text("Cache clean") }
+                        }
+                        OnOff("Background bloat standby", can, { run { Actions.standby(true) } }, { run { Actions.standby(false) } })
+                        OnOff("Phantom process limit", can, { run { Actions.phantom(true) } }, { run { Actions.phantom(false) } })
+                    }
                 }
-                OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.clearGameCache(selected) } }) { Text("Game cache clear") }
-            }
-        }
 
-        // --- Extra gaming tools ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Extra gaming tools", style = MaterialTheme.typography.titleMedium)
-                OnOff("Refresh 120Hz", ready && !busy, { run { Actions.lockRefresh(120) } }, { run { Actions.lockRefresh(null) } })
-                OnOff("DND", ready && !busy, { run { Actions.dnd(true) } }, { run { Actions.dnd(false) } })
-                OnOff("Wi-Fi low latency", ready && !busy, { run { Actions.wifiLowLatency(true) } }, { run { Actions.wifiLowLatency(false) } })
-                OnOff("Game keep-alive", ready && !busy, { run { Actions.keepAlive(selected, true) } }, { run { Actions.keepAlive(selected, false) } })
-                OnOff("Animations 0.5x", ready && !busy, { run { Actions.animations("0.5") } }, { run { Actions.animations(null) } })
-                OnOff("Game Mode 120fps", ready && !busy, { run { Actions.gameModeTuning(selected, 120, "1.0") } }, { run { Actions.gameModeReset(selected) } })
-                OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.optimizeApp(selected) } }) { Text("Game optimize (dexopt, slow)") }
-                Button(enabled = ready && !busy, onClick = { run { Actions.revertAll(selected) } }) { Text("Sab kuch default par wapas") }
-            }
-        }
+                1 -> {
+                    Section("Resolution scale (Game Mode)") {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("0.5", "0.6", "0.7", "0.8", "0.9", "1.0").forEach { v ->
+                                FilterChip(selected = ds == v, onClick = { ds = v }, label = { Text(v) })
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(60, 90, 120).forEach { v ->
+                                FilterChip(selected = fps == v, onClick = { fps = v }, label = { Text("$v FPS") })
+                            }
+                        }
+                        Button(enabled = can, onClick = { run { Actions.gameModeTuning(selected, fps, ds) } }) { Text("Apply (cmd game set)") }
+                        OutlinedButton(enabled = can, onClick = { run { Actions.overlayFallback(selected, fps, ds) } }) { Text("Apply (fallback: game_overlay)") }
+                        OutlinedButton(enabled = can, onClick = { run { Actions.gameModeReset(selected) + "\n" + Actions.overlayReset(selected) } }) { Text("Reset Game Mode") }
+                        Text("Asar tab hota hai jab game Android Game Mode support kare; PUBG apna resolution khud bhi control karta hai.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Section("Display") {
+                        OnOff("Refresh 120Hz lock", can, { run { Actions.lockRefresh(120) } }, { run { Actions.lockRefresh(null) } })
+                        OnOff("Animations 0.5x", can, { run { Actions.animations("0.5") } }, { run { Actions.animations(null) } })
+                        OutlinedButton(enabled = can, onClick = { run { Actions.densityInfo() } }) { Text("Density dekhein") }
+                        OutlinedTextField(value = dpiText, onValueChange = { dpiText = it.filter(Char::isDigit) }, label = { Text("DPI (240-800)") }, singleLine = true)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(enabled = can && dpiText.isNotEmpty(), onClick = { run { Actions.setDensity(dpiText.toInt()) } }) { Text("Set") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.resetDensity() } }) { Text("Reset") }
+                        }
+                    }
+                    Section("Game files (experimental)") {
+                        OutlinedButton(enabled = can, onClick = { run { Actions.optimizeApp(selected) } }) { Text("AOT compile (slow, ek dafa)") }
+                        OutlinedButton(enabled = can, onClick = { run { Actions.clearShaderCache(selected) } }) { Text("Shader cache clear") }
+                        OnOff("UserCustom.ini (potato)", can, { run { Actions.userCustomIni(selected, true) } }, { run { Actions.userCustomIni(selected, false) } })
+                        Text("UserCustom.ini game config badalta hai: asar game version par depend karta hai aur ban ka risk ho sakta hai. OFF dabane se purani file wapas aati hai.", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = can, onClick = { run { Actions.backupConfig(selected) } }) { Text("Backup") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.restoreConfig(selected) } }) { Text("Restore") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.diagnose(selected) } }) { Text("Diagnose") }
+                        }
+                    }
+                }
 
-        // --- Config backup ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Game config backup", style = MaterialTheme.typography.titleMedium)
-                Text("Kisi bhi tool se settings badalne se pehle backup lein.", style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.backupConfig(selected) } }) { Text("Backup") }
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.restoreConfig(selected) } }) { Text("Restore") }
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.diagnose(selected) } }) { Text("Diagnose") }
+                2 -> {
+                    Section("Input guard") {
+                        OnOff("Haptic / vibration band", can, { run { Actions.haptics(true) } }, { run { Actions.haptics(false) } })
+                        OnOff("Edge back gesture band", can, { run { Actions.edgeGesture(true) } }, { run { Actions.edgeGesture(false) } })
+                        OnOff("DND", can, { run { Actions.dnd(true) } }, { run { Actions.dnd(false) } })
+                        Text(
+                            "Touch sampling rate aur aim/swipe sensitivity shell se nahi badalti (touch chip ka firmware hai). Game ki apni sensitivity PUBG Settings mein hai.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Section("Network") {
+                        OnOff("Wi-Fi low latency", can, { run { Actions.wifiLowLatency(true) } }, { run { Actions.wifiLowLatency(false) } })
+                        OnOff("Wi-Fi/BLE background scan band", can, { run { Actions.wifiTweaks(true) } }, { run { Actions.wifiTweaks(false) } })
+                        OnOff("Game keep-alive", can, { run { Actions.keepAlive(selected, true) } }, { run { Actions.keepAlive(selected, false) } })
+                    }
+                    Section("Thermal") {
+                        OnOff("Thermal override (software)", can, { run { Actions.thermalOverride(true) } }, { run { Actions.thermalOverride(false) } })
+                        Text("Ye sirf Android ka thermal status badalta hai; Xiaomi ka hardware throttle nahi rukta.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                else -> {
+                    Section("Revert to Stock") {
+                        Button(enabled = can, onClick = { run { Actions.revertAll(selected) } }) { Text("Sab kuch default par wapas") }
+                        Text("Game ke baad zaroor dabayein: refresh, thermal, game mode, DND, Wi-Fi, haptics sab default.", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
-        }
 
-        // --- Density ---
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Display density", style = MaterialTheme.typography.titleMedium)
-                OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.densityInfo() } }) { Text("Current dekhein") }
-                OutlinedTextField(value = dpiText, onValueChange = { dpiText = it.filter(Char::isDigit) }, label = { Text("DPI (240-800)") }, singleLine = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = ready && !busy && dpiText.isNotEmpty(), onClick = { run { Actions.setDensity(dpiText.toInt()) } }) { Text("Set") }
-                    OutlinedButton(enabled = ready && !busy, onClick = { run { Actions.resetDensity() } }) { Text("Reset") }
-                }
-            }
-        }
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp)) {
-                Text("Log", style = MaterialTheme.typography.titleMedium)
-                Text(log, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-@Composable
-fun OnOff(label: String, enabled: Boolean, onOn: () -> Unit, onOff: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = enabled, onClick = onOn) { Text("ON") }
-            OutlinedButton(enabled = enabled, onClick = onOff) { Text("OFF") }
+            Section("Log") { Text(log, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
