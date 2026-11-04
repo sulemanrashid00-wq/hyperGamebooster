@@ -161,7 +161,7 @@ object Actions {
     suspend fun gameModeTuning(game: String, fps: Int, downscale: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
         require(fps in listOf(60, 90, 120))
-        require(downscale in listOf("1.0", "0.9", "0.8", "0.7"))
+        require(downscale in listOf("1.0", "0.9", "0.8", "0.7", "0.6", "0.5"))
         Sh.run("cmd game set --mode 2 --fps $fps --downscale $downscale $g").ifBlank { "Game Mode tuning set: ${fps}fps, scale $downscale" }
     }
 
@@ -174,11 +174,129 @@ object Actions {
         Sh.run("cmd package compile -m speed-profile -f ${safeGame(game)}")
     }
 
+    /** Fallback: device_config game_overlay (Game Mode ka doosra raasta). */
+    suspend fun overlayFallback(game: String, fps: Int, downscale: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        require(fps in listOf(60, 90, 120))
+        require(downscale in listOf("1.0", "0.9", "0.8", "0.7", "0.6", "0.5"))
+        val a = Sh.run("device_config put game_overlay $g 'mode=2,downscaleFactor=$downscale,fps=$fps'")
+        val b = Sh.run("cmd game mode performance $g")
+        "$a\n$b".trim().ifBlank { "Overlay set: ${fps}fps, scale $downscale" }
+    }
+
+    suspend fun overlayReset(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        Sh.run("device_config delete game_overlay $g").ifBlank { "Overlay reset." }
+    }
+
+    // ---- Thermal (sirf software status; hardware throttling kernel/Xiaomi engine karta hai) ----
+
+    suspend fun thermalOverride(on: Boolean): String = withContext(Dispatchers.IO) {
+        if (on) {
+            Sh.run("cmd thermalservice override-status 0")
+            Sh.run("cmd power set-fixed-performance-mode-enabled true")
+            Sh.run("cmd power set-adaptive-power-saver-enabled false")
+            "Thermal status override ON (sirf software status, hardware throttle nahi rukta)"
+        } else {
+            Sh.run("cmd thermalservice reset")
+            Sh.run("cmd power set-fixed-performance-mode-enabled false")
+            Sh.run("cmd power set-adaptive-power-saver-enabled true")
+            "Thermal override OFF"
+        }
+    }
+
+    suspend fun thermalInfo(): String = withContext(Dispatchers.IO) {
+        val h = Sh.run("cmd thermalservice headroom 10 2>&1 | head -3")
+        val d = Sh.run("dumpsys thermalservice 2>&1 | grep -iE 'Thermal Status|mValue|Temperature' | head -12")
+        "Headroom (1.0 = throttle):\n$h\n\n$d"
+    }
+
+    // ---- Input guard (touch sampling / aim sensitivity shell se nahi badalti; ye sirf interference hatata hai) ----
+
+    suspend fun haptics(off: Boolean): String = withContext(Dispatchers.IO) {
+        val v = if (off) 0 else 1
+        Sh.run("settings put system haptic_feedback_enabled $v")
+        Sh.run("settings put system vibrate_input_devices $v")
+        "Haptic/vibration ${if (off) "OFF" else "ON"}"
+    }
+
+    suspend fun edgeGesture(off: Boolean): String = withContext(Dispatchers.IO) {
+        if (off) {
+            Sh.run("settings put secure back_gesture_inset_scale_left 0")
+            Sh.run("settings put secure back_gesture_inset_scale_right 0")
+            "Edge back gesture OFF (galti se back swipe nahi hoga)"
+        } else {
+            Sh.run("settings delete secure back_gesture_inset_scale_left")
+            Sh.run("settings delete secure back_gesture_inset_scale_right")
+            "Edge back gesture default"
+        }
+    }
+
+    // ---- Network ----
+
+    suspend fun wifiTweaks(on: Boolean): String = withContext(Dispatchers.IO) {
+        val keys = listOf("wifi_scan_always_enabled", "ble_scan_always_enabled", "wifi_suspend_optimizations_enabled")
+        if (on) keys.forEach { Sh.run("settings put global $it 0") } else keys.forEach { Sh.run("settings delete global $it") }
+        "Wi-Fi/BLE background scan ${if (on) "OFF" else "default"}"
+    }
+
+    // ---- Background ----
+
+    private val bloat = listOf("com.xiaomi.mipicks", "com.miui.analytics", "com.miui.msa.global")
+
+    suspend fun standby(on: Boolean): String = withContext(Dispatchers.IO) {
+        bloat.forEach { Sh.run("am set-standby-bucket $it ${if (on) 45 else 20}") }
+        "Background bloat standby: ${if (on) "restricted" else "normal"}"
+    }
+
+    suspend fun phantom(on: Boolean): String = withContext(Dispatchers.IO) {
+        if (on) {
+            Sh.run("settings put global settings_enable_monitor_phantom_procs false")
+            Sh.run("device_config put activity_manager max_phantom_processes 1024")
+        } else {
+            Sh.run("settings delete global settings_enable_monitor_phantom_procs")
+            Sh.run("device_config delete activity_manager max_phantom_processes")
+        }
+        "Phantom process limit: ${if (on) "badha diya" else "default"}"
+    }
+
+    // ---- Shader cache + UserCustom.ini (experimental, ban risk, backup ke saath) ----
+
+    suspend fun clearShaderCache(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        Sh.run("rm -rf /sdcard/Android/data/$g/cache/* /sdcard/Android/data/$g/files/ProgramBinaryCache/*")
+        "Shader/program cache saaf (pehla match thoda stutter kar sakta hai)"
+    }
+
+    suspend fun userCustomIni(game: String, on: Boolean): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        val dir = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
+        val ini = "$dir/UserCustom.ini"
+        if (on) {
+            Sh.run(
+                "mkdir -p '$dir' && { [ -f '$ini' ] && [ ! -f '$ini.hgb_bak' ] && cp '$ini' '$ini.hgb_bak'; true; } && " +
+                    "printf '[SystemSettings]\\nr.MipMapLODBias=3\\nr.ShadowQuality=0\\nr.BloomQuality=0\\n' > '$ini' && echo written"
+            ).ifBlank { "written" } + " (experimental: asar game version par depend karta hai)"
+        } else {
+            Sh.run("if [ -f '$ini.hgb_bak' ]; then mv '$ini.hgb_bak' '$ini'; else rm -f '$ini'; fi; echo restored")
+        }
+    }
+
+    /** Ek button: sab kuch performance ke liye. Revert ke liye revertAll() hai. */
+    suspend fun esportsMode(game: String, self: String): String {
+        return listOf(
+            thermalOverride(true), lockRefresh(120), applyProfile(Profile.PERFORMANCE, game),
+            dnd(true), wifiLowLatency(true), keepAlive(game, true), standby(true), cleanRam(emptySet(), self)
+        ).joinToString("\n")
+    }
+
     /** Game ke baad sab kuch default par wapas. */
     suspend fun revertAll(game: String): String {
         return listOf(
             lockRefresh(null), animations(null), dnd(false), wifiLowLatency(false),
-            keepAlive(game, false), gameModeReset(game), applyProfile(Profile.BALANCED, game)
+            keepAlive(game, false), gameModeReset(game), overlayReset(game),
+            thermalOverride(false), standby(false), haptics(false), edgeGesture(false),
+            wifiTweaks(false), phantom(false), applyProfile(Profile.BALANCED, game)
         ).joinToString("\n")
     }
 
