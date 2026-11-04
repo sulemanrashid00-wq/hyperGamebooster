@@ -237,6 +237,10 @@ private fun readStats(ctx: Context): String {
     val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
     val hz = (ctx.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
         .getDisplay(0)?.refreshRate ?: 0f
-    return "Battery: ${if (level >= 0) level * 100 / scale else 0}%   Temp: %.1f C\nRAM free: %d / %d MB\nRefresh rate: %.0f Hz"
-        .format(temp, mi.availMem shr 20, mi.totalMem shr 20, hz)
+    val pct = if (level >= 0) level * 100 / scale else 0
+    val freeMb = mi.availMem shr 20
+    val totalMb = mi.totalMem shr 20
+    return "Battery: $pct%   Temp: ${"%.1f".format(temp)} C\n" +
+        "RAM free: $freeMb / $totalMb MB\n" +
+        "Refresh rate: ${hz.toInt()} Hz"
 }
