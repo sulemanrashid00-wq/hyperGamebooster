@@ -142,6 +142,8 @@ fun App() {
                     Section("Monitor") {
                         Text(stats)
                         OutlinedButton(enabled = can, onClick = { run { Actions.thermalInfo() } }) { Text("Thermal headroom check") }
+                        OutlinedButton(enabled = can, onClick = { run { Actions.fpsTest(selected) } }) { Text("FPS test (asli FPS naapein)") }
+                        Text("Dabane ke 5 second baad naapna shuru hota hai: game kholein aur match/lobby mein 15 second rukein. Result neeche Log mein aayega.", style = MaterialTheme.typography.bodySmall)
                     }
                     Section("1-Tap Boost") {
                         Button(enabled = can, onClick = { run { Actions.esportsMode(selected, ctx.packageName) } }) { Text("ACTIVATE ESPORTS MODE") }
