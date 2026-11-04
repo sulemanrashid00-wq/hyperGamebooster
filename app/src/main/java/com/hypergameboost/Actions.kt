@@ -1,6 +1,7 @@
 package com.hypergameboost
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 enum class Profile { PERFORMANCE, BALANCED, BATTERY_SAVER }
@@ -280,6 +281,42 @@ object Actions {
         } else {
             Sh.run("if [ -f '$ini.hgb_bak' ]; then mv '$ini.hgb_bak' '$ini'; else rm -f '$ini'; fi; echo restored")
         }
+    }
+
+    /**
+     * Asli FPS measure karta hai (SurfaceFlinger ke frame timestamps se).
+     * Button dabane ke 5 second baad sampling shuru hoti hai: us dauran game screen par aa jaye.
+     */
+    suspend fun fpsTest(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        delay(5000)
+        val layers = Sh.run("dumpsys SurfaceFlinger --list").lines().filter { it.contains(g) }
+        val layer = (layers.firstOrNull { it.contains("SurfaceView") } ?: layers.firstOrNull())?.trim()
+            ?: return@withContext "Game ki layer nahi mili. Game screen par chal rahi honi chahiye (match ya lobby)."
+        val times = sortedSetOf<Long>()
+        repeat(20) {
+            Sh.run("dumpsys SurfaceFlinger --latency '$layer'").lines().drop(1).forEach { line ->
+                val p = line.trim().split(Regex("\\s+"))
+                if (p.size >= 3) {
+                    val t = p[1].toLongOrNull()
+                    if (t != null && t > 0L && t != Long.MAX_VALUE) times.add(t)
+                }
+            }
+            delay(500)
+        }
+        val ts = times.toList()
+        if (ts.size < 20) return@withContext "Frame data bahut kam mila (${ts.size}). Game foreground mein rakhein aur dobara try karein."
+        val diffsMs = ts.zipWithNext { a, b -> (b - a) / 1_000_000.0 }
+        val avgFps = (ts.size - 1) * 1_000_000_000.0 / (ts.last() - ts.first())
+        val sorted = diffsMs.sorted()
+        val p99 = sorted[((sorted.size - 1) * 0.99).toInt()]
+        val over25 = diffsMs.count { it > 25.0 }
+        val over50 = diffsMs.count { it > 50.0 }
+        "FPS test (10 sec)\n" +
+            "Average FPS: ${"%.1f".format(avgFps)}\n" +
+            "1% low FPS: ${"%.1f".format(1000.0 / p99)}\n" +
+            "Frames > 25 ms: $over25   Frames > 50 ms: $over50 (kul ${diffsMs.size})\n" +
+            "Layer: $layer"
     }
 
     /** Ek button: sab kuch performance ke liye. Revert ke liye revertAll() hai. */
