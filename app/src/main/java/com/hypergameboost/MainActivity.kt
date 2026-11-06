@@ -246,6 +246,21 @@ fun App() {
                 }
 
                 1 -> {
+                    Section("Asli Resolution (system-wide, PUBG par bhi chalta hai)") {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(100, 90, 85, 80, 75, 70, 65, 60).forEach { p ->
+                                FilterChip(selected = false, enabled = can, onClick = {
+                                    ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit().putInt("res_$selected", p).apply()
+                                    run { Actions.setResolution(p) }
+                                }, label = { Text("$p%") })
+                            }
+                        }
+                        OutlinedButton(enabled = can, onClick = {
+                            ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit().remove("res_$selected").apply()
+                            run { Actions.resetResolution() }
+                        }) { Text("Resolution Reset (original)") }
+                        Text("Dabate hi screen resolution + density kam hoti hai (UI wahi size ki rehti hai). Auto mode is game ke liye yehi % lagayega aur game band hone par original kar dega. 75-80% best balance hai.", style = MaterialTheme.typography.bodySmall)
+                    }
                     Section("Resolution scale (Game Mode)") {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("0.5", "0.6", "0.7", "0.8", "0.9", "1.0").forEach { v ->
