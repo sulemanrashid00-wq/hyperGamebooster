@@ -537,7 +537,7 @@ object Actions {
         return listOf(
             thermalOverride(true), lockRefresh(120), applyProfile(Profile.PERFORMANCE, game),
             dnd(true), headsUp(true), wifiLowLatency(true), keepAlive(game, true), standby(true),
-            suspendSocial(true), gamePerf(game, true), cleanRam(emptySet(), self)
+            suspendSocial(true), cleanRam(emptySet(), self)
         ).joinToString("\n")
     }
 
