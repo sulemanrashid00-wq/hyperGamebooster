@@ -254,6 +254,11 @@ fun App() {
                         Button(enabled = can, onClick = { run { Actions.gameModeTuning(selected, fps, ds) } }) { Text("Apply (cmd game set)") }
                         OutlinedButton(enabled = can, onClick = { run { Actions.overlayFallback(selected, fps, ds) } }) { Text("Apply (fallback: game_overlay)") }
                         OutlinedButton(enabled = can, onClick = { run { Actions.gameModeReset(selected) + "\n" + Actions.overlayReset(selected) } }) { Text("Reset Game Mode") }
+                        OutlinedButton(enabled = !busy, onClick = {
+                            ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit()
+                                .putString("ds_$selected", ds).putInt("fps_$selected", fps).apply()
+                            log = "Is game ke liye save: scale $ds, ${fps}fps (Auto mode mein khud lagega)"
+                        }) { Text("Is game ke liye save (Auto mode)") }
                         Text("Asar tab hota hai jab game Android Game Mode support kare; PUBG apna resolution khud bhi control karta hai.", style = MaterialTheme.typography.bodySmall)
                     }
                     Section("Display") {
@@ -309,6 +314,8 @@ fun App() {
                         OnOff("Wi-Fi/BLE background scan band", can, { run { Actions.wifiTweaks(true) } }, { run { Actions.wifiTweaks(false) } })
                         OnOff("Captive portal check band", can, { run { Actions.captivePortal(true) } }, { run { Actions.captivePortal(false) } })
                         OnOff("Game keep-alive", can, { run { Actions.keepAlive(selected, true) } }, { run { Actions.keepAlive(selected, false) } })
+                        OnOff("Social apps background data firewall", can, { run { Actions.backgroundFirewall(true) } }, { run { Actions.backgroundFirewall(false) } })
+                        OnOff("Bluetooth absolute volume off", can, { run { Actions.btAbsVolume(true) } }, { run { Actions.btAbsVolume(false) } })
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(enabled = can, onClick = { run { Actions.dns("cloudflare") } }) { Text("DNS Cloudflare") }
                             OutlinedButton(enabled = can, onClick = { run { Actions.dns("google") } }) { Text("DNS Google") }
@@ -336,7 +343,17 @@ fun App() {
                         }
                     }
                     Section("Network") {
-                        OutlinedButton(enabled = can, onClick = { run { Actions.pingTest() } }) { Text("Ping test (1.1.1.1)") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = can, onClick = { run { Actions.pingTest() } }) { Text("Ping test") }
+                            OutlinedButton(enabled = can, onClick = { run { Actions.dnsBenchmark() } }) { Text("DNS benchmark") }
+                        }
+                    }
+                    Section("Earphone Left / Right test") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { AudioTest.play(0) }) { Text("Sirf LEFT") }
+                            OutlinedButton(onClick = { AudioTest.play(1) }) { Text("Sirf RIGHT") }
+                        }
+                        Text("Sahi hone par left dabane par sirf left kaan mein awaaz aani chahiye.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -371,11 +388,16 @@ private fun readStats(ctx: Context): String {
     } else {
         "n/a"
     }
+    val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+    val ma = Math.abs(bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)) / 1000
+    val mv = bat?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+    val watts = ma.toDouble() * mv / 1_000_000.0
     val pct = if (level >= 0) level * 100 / scale else 0
     val freeMb = mi.availMem shr 20
     val totalMb = mi.totalMem shr 20
     return "Battery: $pct%   Temp: ${"%.1f".format(temp)} C\n" +
         "RAM free: $freeMb / $totalMb MB\n" +
         "Refresh rate: ${hz.toInt()} Hz\n" +
-        "Thermal status: $thermal"
+        "Thermal status: $thermal\n" +
+        "Power draw: $ma mA (~${"%.1f".format(watts)} W)"
 }
