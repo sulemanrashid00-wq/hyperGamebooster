@@ -594,4 +594,21 @@ object Actions {
         Sh.run("wm size reset"); Sh.run("wm density reset")
         "Resolution + density original par wapas"
     }
+
+    // ---- Stretch resolution (UltDroid jaisa): aspect ratio badal kar touch mapping + load badalta hai ----
+    // Portrait coordinates: physical W x H (jaise 1280x2772). Landscape game mein W = height, H = width.
+
+    /** mode: "sens" = landscape height badhao (width wahi) -> zyada pixels per mm = zyada sensitivity.
+     *  mode: "smooth" = landscape width ghatao (height wahi) -> kam pixels = halka GPU load. level: low/med/high */
+    suspend fun stretchResolution(mode: String, level: String): String = withContext(Dispatchers.IO) {
+        val (pw, ph) = parseWH(Sh.run("wm size"), "Physical size") ?: return@withContext "Screen size parse nahi hui"
+        val f = when (level) { "low" -> 1; "med" -> 2; "high" -> 3; else -> return@withContext "Default: original" }
+        val (w, h) = if (mode == "sens") {
+            ((pw * (100 + 5 * f) / 100) / 2 * 2) to ph
+        } else {
+            pw to ((ph * (100 - 7 * f) / 100) / 2 * 2)
+        }
+        val out = Sh.run("wm size ${w}x$h")
+        "Stretch ${if (mode == "sens") "Sensitivity" else "Smoothness"} $level: ${w}x$h (original ${pw}x$ph) $out".trim()
+    }
 }
