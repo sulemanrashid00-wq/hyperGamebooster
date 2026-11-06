@@ -270,6 +270,23 @@ fun App() {
                         }) { Text("Resolution Reset (original)") }
                         Text("Dabate hi screen resolution + density kam hoti hai (UI wahi size ki rehti hai). Auto mode is game ke liye yehi % lagayega aur game band hone par original kar dega. 75-80% best balance hai.", style = MaterialTheme.typography.bodySmall)
                     }
+                    Section("Stretch Resolution (UltDroid jaisa)") {
+                        Text("Sensitivity: landscape height badhta hai (zyada pixels per mm = swipe/aim tez). Smoothness: width kam (halka GPU load). Default = original. Game band hone par original wapas.", style = MaterialTheme.typography.bodySmall)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("sens" to "Sensitivity", "smooth" to "Smoothness").forEach { (mk, ml) ->
+                                listOf("low", "med", "high").forEach { lv ->
+                                    FilterChip(selected = false, enabled = can, onClick = {
+                                        ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit().putString("stretch_$selected", "$mk:$lv").apply()
+                                        run { Actions.stretchResolution(mk, lv) }
+                                    }, label = { Text("$ml $lv") })
+                                }
+                            }
+                        }
+                        OutlinedButton(enabled = can, onClick = {
+                            ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit().remove("stretch_$selected").apply()
+                            run { Actions.resetResolution() }
+                        }) { Text("Default (original resolution)") }
+                    }
                     Section("Resolution scale (Game Mode)") {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("0.5", "0.6", "0.7", "0.8", "0.9", "1.0").forEach { v ->
