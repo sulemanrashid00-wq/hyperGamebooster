@@ -62,6 +62,11 @@ class AutoService : Service() {
                 if (!active) {
                     active = true
                     Actions.esportsMode(game, packageName)
+                    // Per-game saved profile (GFX tab: "Is game ke liye save")
+                    val sp = getSharedPreferences("hgb", Context.MODE_PRIVATE)
+                    val ds = sp.getString("ds_$game", null)
+                    val fps = sp.getInt("fps_$game", 0)
+                    if (ds != null && fps != 0) Actions.gameModeTuning(game, fps, ds)
                 }
             } else if (active) {
                 missing++
