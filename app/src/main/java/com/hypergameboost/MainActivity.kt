@@ -121,6 +121,7 @@ fun App() {
     var busy by remember { mutableStateOf(false) }
     var dpiText by remember { mutableStateOf("") }
     var stats by remember { mutableStateOf("") }
+    var nativeReport by remember { mutableStateOf(NativeTools.deviceReport(ctx)) }
     var tab by remember { mutableStateOf(0) }
     var ds by remember { mutableStateOf("0.7") }
     var fps by remember { mutableStateOf(120) }
@@ -206,6 +207,14 @@ fun App() {
         ) {
             when (tab) {
                 0 -> {
+                    Section("Native mode (bina Shizuku ke bhi chalta hai)") {
+                        Text(nativeReport, style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { nativeReport = NativeTools.deviceReport(ctx) }) { Text("Refresh info") }
+                            OutlinedButton(onClick = { log = NativeTools.setWifiLowLatency(ctx, true) }) { Text("Wi-Fi low-latency ON") }
+                            OutlinedButton(onClick = { log = NativeTools.setWifiLowLatency(ctx, false) }) { Text("OFF") }
+                        }
+                    }
                     Section("1-Tap Boost") {
                         Button(enabled = can, onClick = { run { Actions.esportsMode(selected, ctx.packageName) } }) { Text("ACTIVATE ESPORTS MODE") }
                         Text("Thermal override + 120Hz + Performance + DND + Wi-Fi low latency + keep-alive + RAM clean", style = MaterialTheme.typography.bodySmall)
@@ -368,6 +377,17 @@ fun App() {
                         OnOff("Floating HUD (FPS / Temp / Ping)", true, { overlay(true, toolsOn) }, { overlay(false, toolsOn) })
                         OnOff("Tools panel (stopwatch, counter, screenshot, AFK)", true, { overlay(hudOn, true) }, { overlay(hudOn, false) })
                         Text("HUD game ke upar FPS, temperature, thermal level aur ping dikhata hai. Tools panel ko drag karein; header tap karne se khulta/band hota hai. AFK mode se bahar nikalne ke liye 3 baar tez tap karein.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Section("Lobby timer (Flash Return)") {
+                        Text("Match shuru hone ke intezaar mein game minimize karein; floating timer dikhega. Tap = game wapis, lamba dabao = band. Overlay permission upar se dein.", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(30, 45, 60).forEach { s ->
+                                OutlinedButton(onClick = {
+                                    ctx.startForegroundService(Intent(ctx, LobbyTimerService::class.java)
+                                        .putExtra(LobbyTimerService.EXTRA_GAME, selected).putExtra(LobbyTimerService.EXTRA_SECONDS, s))
+                                }) { Text("${s}s") }
+                            }
+                        }
                     }
                     Section("Earphone Left / Right test") {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
