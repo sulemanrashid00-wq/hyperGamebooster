@@ -67,6 +67,8 @@ class AutoService : Service() {
                     val ds = sp.getString("ds_$game", null)
                     val fps = sp.getInt("fps_$game", 0)
                     if (ds != null && fps != 0) Actions.gameModeTuning(game, fps, ds)
+                    val res = sp.getInt("res_$game", 0)
+                    if (res in 55..99) Actions.setResolution(res)
                 }
             } else if (active) {
                 missing++
