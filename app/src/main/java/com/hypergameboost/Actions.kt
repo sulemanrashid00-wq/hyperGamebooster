@@ -1,35 +1,37 @@
-package com.hypergameboost
-
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-
-enum class Profile { PERFORMANCE, BALANCED, BATTERY_SAVER }
-
-object Games {
-    /** Jo PUBG variants app pehchanti hai (package name hamesha is list se aata hai, user input se nahi) */
-    val known = linkedMapOf(
-        "com.tencent.ig" to "PUBG Mobile (Global)",
-        "com.pubg.imobile" to "BGMI",
-        "com.pubg.krmobile" to "PUBG Mobile (KR)",
-        "com.vng.pubgmobile" to "PUBG Mobile (VN)",
-        "com.rekoo.pubgm" to "PUBG Mobile (TW)"
-    )
-}
-
-object Actions {
-    private val pkgRegex = Regex("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z0-9_]+)+$")
-
-    private const val CONFIG_SUFFIX =
-        "files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
-    private const val BACKUP_ROOT = "/sdcard/HyperGameBooster/backup"
-
-    private fun safeGame(pkg: String): String {
-        require(pkg in Games.known) { "Unknown game package" }
-        return pkg
+        }
+        Snaps.map[name] = m
+        "Snapshot $name saved (${m.size} entries)"
     }
 
-    suspend fun installedGames(): List<String> = withContext(Dispatchers.IO) {
-        val out = Sh.run("pm list packages")
-        Games.known.keys.filter { out.contains("package:$it") }
+    fun diffSnaps(): String {
+        val a = Snaps.map["A"]
+        val b = Snaps.map["B"]
+        if (a == null || b == null) return "Pehle A aur B dono snapshot lein."
+        val out = (a.keys + b.keys).toSortedSet().mapNotNull { k ->
+            val x = a[k]
+            val y = b[k]
+            if (x != y) "$k: ${x ?: "(none)"} -> ${y ?: "(none)"}" else null
+        }
+        return if (out.isEmpty()) "Koi fark nahi mila." else "${out.size} badlav:\n" + out.take(80).joinToString("\n")
     }
+
+    /** Overlay permission Shizuku se (settings mein jaane ki zarurat nahi). */
+    suspend fun grantOverlay(pkg: String): String = withContext(Dispatchers.IO) {
+        require(pkgRegex.matches(pkg))
+        Sh.run("appops set $pkg SYSTEM_ALERT_WINDOW allow").ifBlank { "Overlay permission de di gayi." }
+    }
+
+    // ---- v0.6: DNS benchmark, background data firewall, Bluetooth volume ----
+
+    suspend fun dnsBenchmark(): String = withContext(Dispatchers.IO) {
+        listOf("1.1.1.1" to "Cloudflare", "8.8.8.8" to "Google", "9.9.9.9" to "Quad9").joinToString("\n") { (ip, name) ->
+            val r = Sh.run("ping -c 5 -i 0.3 -W 2 $ip 2>&1 | tail -1")
+            "$name ($ip): " + r.ifBlank { "koi jawab nahi" }
+        }
+    }
+
+    @Volatile
+    private var firewallOn = false
+
+    /**
+     * Social apps ka background data Data Saver ke zariye band. Dhyan: Data Saver poore phone par on hota hai,
