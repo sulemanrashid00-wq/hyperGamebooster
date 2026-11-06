@@ -316,14 +316,153 @@ object Actions {
             "Average FPS: ${"%.1f".format(avgFps)}\n" +
             "1% low FPS: ${"%.1f".format(1000.0 / p99)}\n" +
             "Frames > 25 ms: $over25   Frames > 50 ms: $over50 (kul ${diffsMs.size})\n" +
-            "Layer: $layer"
+            "Layer: $layer\n\n" + throttleInspector()
+    }
+
+    // ---- Display saturation (SurfaceFlinger debug call; HyperOS 3 par kaam na kare to koi nuqsan nahi) ----
+
+    suspend fun saturation(v: String?): String = withContext(Dispatchers.IO) {
+        val s = v ?: "1.0"
+        require(s in listOf("1.0", "1.2", "1.4", "1.6"))
+        val out = Sh.run("service call SurfaceFlinger 1022 f $s")
+        "Saturation $s -> $out"
+    }
+
+    // ---- Network ----
+
+    /** mode: cloudflare | google | auto */
+    suspend fun dns(mode: String): String = withContext(Dispatchers.IO) {
+        when (mode) {
+            "cloudflare" -> {
+                Sh.run("settings put global private_dns_mode hostname")
+                Sh.run("settings put global private_dns_specifier one.one.one.one")
+                "Private DNS: Cloudflare"
+            }
+            "google" -> {
+                Sh.run("settings put global private_dns_mode hostname")
+                Sh.run("settings put global private_dns_specifier dns.google")
+                "Private DNS: Google"
+            }
+            else -> {
+                Sh.run("settings put global private_dns_mode opportunistic")
+                "Private DNS: Automatic"
+            }
+        }
+    }
+
+    // ---- Notifications / brightness ----
+
+    suspend fun headsUp(off: Boolean): String = withContext(Dispatchers.IO) {
+        Sh.run("settings put global heads_up_notifications_enabled ${if (off) 0 else 1}")
+        "Heads-up popups ${if (off) "band" else "chalu"}"
+    }
+
+    suspend fun brightnessLock(lock: Boolean): String = withContext(Dispatchers.IO) {
+        Sh.run("settings put system screen_brightness_mode ${if (lock) 0 else 1}")
+        "Auto-brightness ${if (lock) "band (manual)" else "chalu"}"
+    }
+
+    // ---- Storage ----
+
+    suspend fun fstrim(): String = withContext(Dispatchers.IO) {
+        Sh.run("sm fstrim").ifBlank { "TRIM chala diya gaya." }
+    }
+
+    suspend fun settingsSnapshot(): String = withContext(Dispatchers.IO) {
+        Sh.run(
+            "mkdir -p /sdcard/HyperGameBooster/settings_snapshot && " +
+                "settings list system > /sdcard/HyperGameBooster/settings_snapshot/system.txt && " +
+                "settings list secure > /sdcard/HyperGameBooster/settings_snapshot/secure.txt && " +
+                "settings list global > /sdcard/HyperGameBooster/settings_snapshot/global.txt && " +
+                "echo 'Snapshot saved: /sdcard/HyperGameBooster/settings_snapshot/'"
+        )
+    }
+
+    // ---- Throttle inspector (sirf padhta hai) ----
+
+    /**
+     * CPU/GPU ki current aur max frequency aur thermal zones dikhata hai.
+     * Agar game ke dauran cur freq max se bahut neeche ho to throttling ho rahi hai.
+     * Kuch sysfs files shell ko SELinux padhne nahi deta: wahan "Permission denied" aayega.
+     */
+    suspend fun throttleInspector(): String = withContext(Dispatchers.IO) {
+        val cpu = Sh.run(
+            "for c in /sys/devices/system/cpu/cpu[0-9]*; do " +
+                "echo \"\$(basename \$c): \$(cat \$c/cpufreq/scaling_cur_freq 2>&1) / \$(cat \$c/cpufreq/scaling_max_freq 2>&1) kHz\"; done"
+        )
+        val gpu = Sh.run(
+            "echo \"gpuclk: \$(cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>&1)\"; " +
+                "echo \"max_gpuclk: \$(cat /sys/class/kgsl/kgsl-3d0/max_gpuclk 2>&1)\"; " +
+                "echo \"gpu busy %: \$(cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>&1)\""
+        )
+        val temps = Sh.run(
+            "for z in /sys/class/thermal/thermal_zone*; do " +
+                "echo \"\$(cat \$z/type 2>/dev/null) \$(cat \$z/temp 2>/dev/null)\"; done | grep -iE 'cpu|gpu|skin|battery|soc' | head -25"
+        )
+        "== CPU (cur / max)\n$cpu\n\n== GPU\n$gpu\n\n== Temps (milli-degree C)\n$temps"
+    }
+
+    // ---- v0.5: social apps suspend, captive portal, ping, settings A/B diff ----
+
+    private val socialApps = listOf("com.zhiliaoapp.musically", "com.instagram.android", "com.facebook.katana")
+
+    /** Game ke dauran social apps suspend (notification/CPU band). OFF par sab wapas. */
+    suspend fun suspendSocial(on: Boolean): String = withContext(Dispatchers.IO) {
+        val installed = Sh.run("pm list packages")
+        val hit = socialApps.filter { installed.contains("package:$it") }
+        hit.forEach { Sh.run("pm ${if (on) "suspend" else "unsuspend"} --user 0 $it") }
+        "Social apps ${if (on) "suspended" else "unsuspended"}: ${hit.size}"
+    }
+
+    suspend fun captivePortal(off: Boolean): String = withContext(Dispatchers.IO) {
+        if (off) Sh.run("settings put global captive_portal_mode 0") else Sh.run("settings delete global captive_portal_mode")
+        "Captive portal check ${if (off) "band" else "default"}"
+    }
+
+    suspend fun pingTest(): String = withContext(Dispatchers.IO) {
+        "Ping 1.1.1.1 (10 packets)\n" + Sh.run("ping -c 10 -i 0.3 -W 2 1.1.1.1 2>&1 | tail -3")
+    }
+
+    object Snaps {
+        val map = mutableMapOf<String, Map<String, String>>()
+    }
+
+    /** Game Turbo ki asli keys dhoondhne ke liye: A lein, Game Turbo ka ek option badlein, B lein, diff dekhein. */
+    suspend fun snapshot(name: String): String = withContext(Dispatchers.IO) {
+        require(name == "A" || name == "B")
+        val m = linkedMapOf<String, String>()
+        for (ns in listOf("system", "secure", "global")) {
+            Sh.run("settings list $ns").lines().forEach { l ->
+                val i = l.indexOf('=')
+                if (i > 0) m["$ns:${l.substring(0, i)}"] = l.substring(i + 1)
+            }
+        }
+        val propRegex = Regex("^\\[(.*)\\]: \\[(.*)\\]$")
+        Sh.run("getprop").lines().forEach { l ->
+            propRegex.find(l.trim())?.let { m["prop:${it.groupValues[1]}"] = it.groupValues[2] }
+        }
+        Snaps.map[name] = m
+        "Snapshot $name saved (${m.size} entries)"
+    }
+
+    fun diffSnaps(): String {
+        val a = Snaps.map["A"]
+        val b = Snaps.map["B"]
+        if (a == null || b == null) return "Pehle A aur B dono snapshot lein."
+        val out = (a.keys + b.keys).toSortedSet().mapNotNull { k ->
+            val x = a[k]
+            val y = b[k]
+            if (x != y) "$k: ${x ?: "(none)"} -> ${y ?: "(none)"}" else null
+        }
+        return if (out.isEmpty()) "Koi fark nahi mila." else "${out.size} badlav:\n" + out.take(80).joinToString("\n")
     }
 
     /** Ek button: sab kuch performance ke liye. Revert ke liye revertAll() hai. */
     suspend fun esportsMode(game: String, self: String): String {
         return listOf(
             thermalOverride(true), lockRefresh(120), applyProfile(Profile.PERFORMANCE, game),
-            dnd(true), wifiLowLatency(true), keepAlive(game, true), standby(true), cleanRam(emptySet(), self)
+            dnd(true), headsUp(true), wifiLowLatency(true), keepAlive(game, true), standby(true),
+            suspendSocial(true), cleanRam(emptySet(), self)
         ).joinToString("\n")
     }
 
@@ -333,7 +472,9 @@ object Actions {
             lockRefresh(null), animations(null), dnd(false), wifiLowLatency(false),
             keepAlive(game, false), gameModeReset(game), overlayReset(game),
             thermalOverride(false), standby(false), haptics(false), edgeGesture(false),
-            wifiTweaks(false), phantom(false), applyProfile(Profile.BALANCED, game)
+            wifiTweaks(false), phantom(false), saturation(null), dns("auto"),
+            headsUp(false), brightnessLock(false), suspendSocial(false), captivePortal(false),
+            applyProfile(Profile.BALANCED, game)
         ).joinToString("\n")
     }
 
