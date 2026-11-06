@@ -69,6 +69,7 @@ class AutoService : Service() {
                     if (ds != null && fps != 0) Actions.gameModeTuning(game, fps, ds)
                     val res = sp.getInt("res_$game", 0)
                     if (res in 55..99) Actions.setResolution(res)
+                    sp.getString("stretch_$game", null)?.split(":")?.let { if (it.size == 2) Actions.stretchResolution(it[0], it[1]) }
                 }
             } else if (active) {
                 missing++
