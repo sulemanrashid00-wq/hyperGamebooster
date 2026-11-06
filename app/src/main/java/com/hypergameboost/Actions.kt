@@ -549,7 +549,7 @@ object Actions {
             thermalOverride(false), standby(false), haptics(false), edgeGesture(false),
             wifiTweaks(false), phantom(false), saturation(null), dns("auto"),
             headsUp(false), brightnessLock(false), suspendSocial(false), gamePerf(game, false), captivePortal(false), firewallRevertIfOn(),
-            applyProfile(Profile.BALANCED, game)
+            applyProfile(Profile.BALANCED, game), resetResolution()
         ).joinToString("\n")
     }
 
@@ -564,5 +564,34 @@ object Actions {
 
     suspend fun resetDensity(): String = withContext(Dispatchers.IO) {
         Sh.run("wm density reset").ifBlank { "Density reset ho gayi." }
+    }
+
+    // ---- Asli resolution (system-wide, har game par chalta hai; cmd game downscale PUBG ignore karta hai) ----
+
+    private fun parseWH(s: String, key: String): Pair<Int, Int>? {
+        val m = Regex(key + """:\s*(\d+)x(\d+)""").find(s) ?: return null
+        return m.groupValues[1].toInt() to m.groupValues[2].toInt()
+    }
+
+    suspend fun setResolution(percent: Int): String = withContext(Dispatchers.IO) {
+        require(percent in 55..100) { "Resolution 55-100% ke beech hona chahiye" }
+        val sizeOut = Sh.run("wm size")
+        val (pw, ph) = parseWH(sizeOut, "Physical size") ?: return@withContext "Screen size parse nahi hui: $sizeOut"
+        val dOut = Sh.run("wm density")
+        val pd = Regex("""Physical density:\s*(\d+)""").find(dOut)?.groupValues?.get(1)?.toInt()
+        if (percent == 100) {
+            Sh.run("wm size reset"); Sh.run("wm density reset")
+            return@withContext "Resolution original: ${pw}x$ph"
+        }
+        val w = (pw * percent / 100) / 2 * 2
+        val h = (ph * percent / 100) / 2 * 2
+        val a = Sh.run("wm size ${w}x$h")
+        val b = if (pd != null) Sh.run("wm density ${pd * percent / 100}") else ""
+        "Resolution ${percent}%: ${w}x$h (original ${pw}x$ph) $a $b".trim()
+    }
+
+    suspend fun resetResolution(): String = withContext(Dispatchers.IO) {
+        Sh.run("wm size reset"); Sh.run("wm density reset")
+        "Resolution + density original par wapas"
     }
 }
