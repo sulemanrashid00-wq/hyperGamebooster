@@ -9,6 +9,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.provider.Settings
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -123,6 +124,8 @@ fun App() {
     var tab by remember { mutableStateOf(0) }
     var ds by remember { mutableStateOf("0.7") }
     var fps by remember { mutableStateOf(120) }
+    var hudOn by remember { mutableStateOf(false) }
+    var toolsOn by remember { mutableStateOf(false) }
     var sat by remember { mutableStateOf("1.0") }
 
     DisposableEffect(Unit) {
@@ -160,6 +163,23 @@ fun App() {
             log = try { block() } catch (e: Throwable) { "ERROR: ${e.message}" }
             busy = false
         }
+    }
+
+    fun overlay(hud: Boolean, tools: Boolean) {
+        hudOn = hud
+        toolsOn = tools
+        if (!Settings.canDrawOverlays(ctx)) {
+            log = "Pehle 'Overlay permission dein' dabayein, phir dobara try karein."
+            hudOn = false
+            toolsOn = false
+            return
+        }
+        ctx.startForegroundService(
+            Intent(ctx, OverlayService::class.java)
+                .putExtra(OverlayService.EXTRA_GAME, selected)
+                .putExtra(OverlayService.EXTRA_HUD, hud)
+                .putExtra(OverlayService.EXTRA_TOOLS, tools)
+        )
     }
 
     val ready = shizuku == ShizukuState.READY
@@ -347,6 +367,12 @@ fun App() {
                             OutlinedButton(enabled = can, onClick = { run { Actions.pingTest() } }) { Text("Ping test") }
                             OutlinedButton(enabled = can, onClick = { run { Actions.dnsBenchmark() } }) { Text("DNS benchmark") }
                         }
+                    }
+                    Section("Overlay pack (HUD + Tools)") {
+                        OutlinedButton(enabled = can, onClick = { run { Actions.grantOverlay(ctx.packageName) } }) { Text("Overlay permission dein (Shizuku se)") }
+                        OnOff("Floating HUD (FPS / Temp / Ping)", true, { overlay(true, toolsOn) }, { overlay(false, toolsOn) })
+                        OnOff("Tools panel (stopwatch, counter, screenshot, AFK)", true, { overlay(hudOn, true) }, { overlay(hudOn, false) })
+                        Text("HUD game ke upar FPS, temperature, thermal level aur ping dikhata hai. Tools panel ko drag karein; header tap karne se khulta/band hota hai. AFK mode se bahar nikalne ke liye 3 baar tez tap karein.", style = MaterialTheme.typography.bodySmall)
                     }
                     Section("Earphone Left / Right test") {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
