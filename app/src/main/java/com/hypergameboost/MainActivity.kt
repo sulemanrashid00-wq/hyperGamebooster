@@ -149,13 +149,6 @@ fun App() {
         }
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            stats = try { readStats(ctx) } catch (e: Throwable) { "Monitor error: ${e.message}" }
-            delay(2000)
-        }
-    }
-
     fun run(block: suspend () -> String) {
         if (busy) return
         busy = true
@@ -213,13 +206,6 @@ fun App() {
         ) {
             when (tab) {
                 0 -> {
-                    Section("Monitor") {
-                        Text(stats)
-                        OutlinedButton(enabled = can, onClick = { run { Actions.thermalInfo() } }) { Text("Thermal headroom check") }
-                        OutlinedButton(enabled = can, onClick = { run { Actions.throttleInspector() } }) { Text("Throttle inspector (CPU/GPU freq + temps)") }
-                        OutlinedButton(enabled = can, onClick = { run { Actions.fpsTest(selected) } }) { Text("FPS test (asli FPS naapein)") }
-                        Text("Dabane ke 5 second baad naapna shuru hota hai: game kholein aur match/lobby mein 15 second rukein. Result neeche Log mein aayega.", style = MaterialTheme.typography.bodySmall)
-                    }
                     Section("1-Tap Boost") {
                         Button(enabled = can, onClick = { run { Actions.esportsMode(selected, ctx.packageName) } }) { Text("ACTIVATE ESPORTS MODE") }
                         Text("Thermal override + 120Hz + Performance + DND + Wi-Fi low latency + keep-alive + RAM clean", style = MaterialTheme.typography.bodySmall)
@@ -343,87 +329,6 @@ fun App() {
                         }
                         Text("DNS badalne se in-game ping zyada nahi badalta (game IP se judta hai); ye sirf login/matchmaking ke liye hai.", style = MaterialTheme.typography.bodySmall)
                     }
-                    Section("Thermal") {
-                        OnOff("Thermal override (software)", can, { run { Actions.thermalOverride(true) } }, { run { Actions.thermalOverride(false) } })
-                        Text("Ye sirf Android ka thermal status badalta hai; Xiaomi ka hardware throttle nahi rukta.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                3 -> {
-                    Section("Touch report rate tester") {
-                        TouchTester()
-                        Text("Ye batata hai ke screen app ko kitni Hz par touch deti hai. Game Turbo ki touch settings badalne ke baad dobara naapein.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Section("Game Turbo ki asli settings dhoondhein (A/B diff)") {
-                        Text("1) A dabayein  2) Game Turbo mein sirf EK option badlein  3) B dabayein  4) Diff dekhein. Log ko dabakar copy kar sakte hain.", style = MaterialTheme.typography.bodySmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(enabled = can, onClick = { run { Actions.snapshot("A") } }) { Text("Snapshot A") }
-                            OutlinedButton(enabled = can, onClick = { run { Actions.snapshot("B") } }) { Text("Snapshot B") }
-                            Button(enabled = !busy, onClick = { run { Actions.diffSnaps() } }) { Text("Diff") }
-                        }
-                    }
-                    Section("Network") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(enabled = can, onClick = { run { Actions.pingTest() } }) { Text("Ping test") }
-                            OutlinedButton(enabled = can, onClick = { run { Actions.dnsBenchmark() } }) { Text("DNS benchmark") }
-                        }
-                    }
-                    Section("Overlay pack (HUD + Tools)") {
-                        OutlinedButton(enabled = can, onClick = { run { Actions.grantOverlay(ctx.packageName) } }) { Text("Overlay permission dein (Shizuku se)") }
-                        OnOff("Floating HUD (FPS / Temp / Ping)", true, { overlay(true, toolsOn) }, { overlay(false, toolsOn) })
-                        OnOff("Tools panel (stopwatch, counter, screenshot, AFK)", true, { overlay(hudOn, true) }, { overlay(hudOn, false) })
-                        Text("HUD game ke upar FPS, temperature, thermal level aur ping dikhata hai. Tools panel ko drag karein; header tap karne se khulta/band hota hai. AFK mode se bahar nikalne ke liye 3 baar tez tap karein.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Section("Earphone Left / Right test") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { AudioTest.play(0) }) { Text("Sirf LEFT") }
-                            OutlinedButton(onClick = { AudioTest.play(1) }) { Text("Sirf RIGHT") }
-                        }
-                        Text("Sahi hone par left dabane par sirf left kaan mein awaaz aani chahiye.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-
-                else -> {
-                    Section("Revert to Stock") {
-                        Button(enabled = can, onClick = { run { Actions.revertAll(selected) } }) { Text("Sab kuch default par wapas") }
-                        Text("Game ke baad zaroor dabayein: refresh, thermal, game mode, DND, Wi-Fi, haptics sab default.", style = MaterialTheme.typography.bodySmall)
-                        OutlinedButton(enabled = can, onClick = { run { Actions.settingsSnapshot() } }) { Text("Settings snapshot (backup)") }
-                        OutlinedButton(enabled = can, onClick = { run { Actions.fstrim() } }) { Text("Storage TRIM (sm fstrim)") }
-                    }
-                }
-            }
-
-            Section("Log") { SelectionContainer { Text(log, style = MaterialTheme.typography.bodySmall) } }
-        }
-    }
-}
-
-private fun readStats(ctx: Context): String {
-    val bat: Intent? = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-    val level = bat?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-    val scale = bat?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
-    val temp = (bat?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f
-    val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-    val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-    val hz = (ctx.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager)
-        .getDisplay(0)?.refreshRate ?: 0f
-    val thermal = if (Build.VERSION.SDK_INT >= 29) {
-        val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-        listOf("None", "Light", "Moderate", "Severe", "Critical", "Emergency", "Shutdown")
-            .getOrElse(pm.currentThermalStatus) { "?" }
-    } else {
-        "n/a"
-    }
-    val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-    val ma = Math.abs(bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)) / 1000
-    val mv = bat?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
-    val watts = ma.toDouble() * mv / 1_000_000.0
-    val pct = if (level >= 0) level * 100 / scale else 0
-    val freeMb = mi.availMem shr 20
-    val totalMb = mi.totalMem shr 20
-    return "Battery: $pct%   Temp: ${"%.1f".format(temp)} C\n" +
-        "RAM free: $freeMb / $totalMb MB\n" +
-        "Refresh rate: ${hz.toInt()} Hz\n" +
-        "Thermal status: $thermal\n" +
-        "Power draw: $ma mA (~${"%.1f".format(watts)} W)"
-}
+                    Section("Background freeze (RAM + CPU khali)") {
+                        OnOff("Cached-apps freezer + compaction + BG apps band + game VIP", can, { run { Actions.gamePerf(selected, true) } }, { run { Actions.gamePerf(selected, false) } })
+                        Text("WhatsApp/Insta/TikTok/Snapchat/Telegram background mein band, game ko
