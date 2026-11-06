@@ -39,6 +39,15 @@
                 android:value="game_hud_overlay" />
         </service>
 
+        <service
+            android:name=".LobbyTimerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="lobby_countdown_overlay" />
+        </service>
+
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
