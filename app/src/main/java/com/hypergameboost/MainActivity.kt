@@ -374,6 +374,12 @@ fun App() {
                         OnOff("Cached-apps freezer + compaction + BG apps band + game VIP", can, { run { Actions.gamePerf(selected, true) } }, { run { Actions.gamePerf(selected, false) } })
                         Text("WhatsApp/Insta/TikTok/Snapchat/Telegram background mein band, game ko VIP standby bucket. Game ke baad Restore se wapas.", style = MaterialTheme.typography.bodySmall)
                     }
+                    Section("Extra performance (UltDroid wali)") {
+                        OnOff("Fixed performance + adaptive saver off + low power off", can, { run { Actions.powerExtras(true) } }, { run { Actions.powerExtras(false) } })
+                        OnOff("Looper stats band (thora halka CPU)", can, { run { Actions.looperStats(true) } }, { run { Actions.looperStats(false) } })
+                        OnOff("Doze (deviceidle) band (battery zyada khayega)", can, { run { Actions.deviceIdle(true) } }, { run { Actions.deviceIdle(false) } })
+                        OutlinedButton(enabled = can, onClick = { run { Actions.killAll() } }) { Text("am kill-all (background saaf)") }
+                    }
                     Section("Thermal") {
                         OnOff("Thermal override (software)", can, { run { Actions.thermalOverride(true) } }, { run { Actions.thermalOverride(false) } })
                         Text("Ye sirf Android ka thermal status badalta hai; Xiaomi ka hardware throttle nahi rukta.", style = MaterialTheme.typography.bodySmall)
