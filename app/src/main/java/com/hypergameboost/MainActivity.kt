@@ -383,6 +383,9 @@ fun App() {
                         OnOff("Looper stats band (thora halka CPU)", can, { run { Actions.looperStats(true) } }, { run { Actions.looperStats(false) } })
                         OnOff("Doze (deviceidle) band (battery zyada khayega)", can, { run { Actions.deviceIdle(true) } }, { run { Actions.deviceIdle(false) } })
                         OutlinedButton(enabled = can, onClick = { run { Actions.killAll() } }) { Text("am kill-all (background saaf)") }
+                        OnOff("DC dimming band (touch/flicker)", can, { run { Actions.dcDimming(true) } }, { run { Actions.dcDimming(false) } })
+                        OutlinedButton(enabled = can, onClick = { run { Actions.idleMaintenance() } }) { Text("Idle maintenance (match se pehle)") }
+                        OutlinedButton(enabled = can, onClick = { run { Actions.cleanGameLogs(selected) } }) { Text("Game Logs saaf (sirf Logs folder)") }
                     }
                     Section("Thermal") {
                         OnOff("Thermal override (software)", can, { run { Actions.thermalOverride(true) } }, { run { Actions.thermalOverride(false) } })
