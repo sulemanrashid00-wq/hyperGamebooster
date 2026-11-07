@@ -40,7 +40,6 @@ object Actions {
         val cmds = when (profile) {
             Profile.PERFORMANCE -> listOf(
                 "cmd game mode performance $g",
-                "cmd power set-fixed-performance-mode-enabled true",
                 "settings put global low_power 0"
             )
             Profile.BALANCED -> listOf(
@@ -63,7 +62,7 @@ object Actions {
 
     /** Third-party apps force-stop karta hai (game, launcher, keyboard, Shizuku aur khud app bachayi jati hain). */
     suspend fun cleanRam(keep: Set<String>, self: String): String = withContext(Dispatchers.IO) {
-        val protectedWords = listOf("launcher", "inputmethod", "keyboard", "shizuku", "dialer", "systemui")
+        val protectedWords = listOf("launcher", "inputmethod", "keyboard", "shizuku", "dialer", "systemui", "whatsapp")
         val pkgs = Sh.run("pm list packages -3")
             .lines()
             .mapNotNull { it.removePrefix("package:").trim().takeIf { p -> pkgRegex.matches(p) } }
@@ -541,9 +540,9 @@ object Actions {
     /** Ek button: sab kuch performance ke liye. Revert ke liye revertAll() hai. */
     suspend fun esportsMode(game: String, self: String): String {
         return listOf(
-            thermalOverride(true), lockRefresh(120), applyProfile(Profile.PERFORMANCE, game),
+            lockRefresh(120), applyProfile(Profile.PERFORMANCE, game),
             dnd(true), headsUp(true), wifiLowLatency(true), keepAlive(game, true), standby(true),
-            suspendSocial(true), cleanRam(emptySet(), self)
+            suspendSocial(true)
         ).joinToString("\n")
     }
 
@@ -642,12 +641,10 @@ object Actions {
         if (on) {
             Sh.run("cmd power set-adaptive-power-saver-enabled false")
             Sh.run("settings put global low_power 0")
-            Sh.run("cmd power set-fixed-performance-mode-enabled true")
         } else {
-            Sh.run("cmd power set-fixed-performance-mode-enabled false")
             Sh.run("cmd power set-adaptive-power-saver-enabled true")
         }
-        "Power extras ${if (on) "ON: adaptive saver off, low power off, fixed performance" else "OFF: default"}"
+        "Power extras ${if (on) "ON: adaptive saver off, low power off" else "OFF: default"}"
     }
 
     // ---- Real, safe extras ----
