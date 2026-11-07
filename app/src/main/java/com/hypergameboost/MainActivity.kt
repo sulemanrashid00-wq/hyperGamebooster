@@ -283,6 +283,10 @@ fun App() {
                             }
                         }
                         OutlinedButton(enabled = can, onClick = {
+                            ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit().putString("stretch_$selected", "ipad:x").apply()
+                            run { Actions.stretchResolution("ipad", "x") }
+                        }) { Text("iPad view (4:3)") }
+                        OutlinedButton(enabled = can, onClick = {
                             ctx.getSharedPreferences("hgb", Context.MODE_PRIVATE).edit().remove("stretch_$selected").apply()
                             run { Actions.resetResolution() }
                         }) { Text("Default (original resolution)") }
