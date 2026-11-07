@@ -474,6 +474,12 @@ object Actions {
         Sh.run("getprop").lines().forEach { l ->
             propRegex.find(l.trim())?.let { m["prop:${it.groupValues[1]}"] = it.groupValues[2] }
         }
+        val noise = Regex("(?i)time|elapsed|uptime|battery|[0-9]{9,}|launcher_state|clock|\\bms\\b")
+        for (cmd in listOf("dumpsys game", "dumpsys display", "cmd game list-configs", "dumpsys power")) {
+            Sh.run("$cmd 2>/dev/null").lines().map { it.trim() }.filter { it.isNotEmpty() && !noise.containsMatchIn(it) }.forEach { l ->
+                m["dump[$cmd]:${l.take(160)}"] = "present"
+            }
+        }
         Snaps.map[name] = m
         "Snapshot $name saved (${m.size} entries)"
     }
@@ -485,7 +491,7 @@ object Actions {
         val out = (a.keys + b.keys).toSortedSet().mapNotNull { k ->
             val x = a[k]
             val y = b[k]
-            if (x != y) "$k: ${x ?: "(none)"} -> ${y ?: "(none)"}" else null
+            if (x != y && !k.contains("launcher_state")) "$k: ${x ?: "(none)"} -> ${y ?: "(none)"}" else null
         }
         return if (out.isEmpty()) "Koi fark nahi mila." else "${out.size} badlav:\n" + out.take(80).joinToString("\n")
     }
@@ -549,7 +555,7 @@ object Actions {
             thermalOverride(false), standby(false), haptics(false), edgeGesture(false),
             wifiTweaks(false), phantom(false), saturation(null), dns("auto"),
             headsUp(false), brightnessLock(false), suspendSocial(false), gamePerf(game, false), captivePortal(false), firewallRevertIfOn(),
-            applyProfile(Profile.BALANCED, game), resetResolution()
+            applyProfile(Profile.BALANCED, game), resetResolution(), looperStats(false), deviceIdle(false)
         ).joinToString("\n")
     }
 
@@ -610,5 +616,31 @@ object Actions {
         }
         val out = Sh.run("wm size ${w}x$h")
         "Stretch ${if (mode == "sens") "Sensitivity" else "Smoothness"} $level: ${w}x$h (original ${pw}x$ph) $out".trim()
+    }
+
+    // ---- UltDroid ke Performance tab ki asli commands ----
+
+    suspend fun looperStats(off: Boolean): String = withContext(Dispatchers.IO) {
+        Sh.run("cmd looper_stats ${if (off) "disable" else "enable"}").ifBlank { "Looper stats ${if (off) "band" else "on"}" }
+    }
+
+    suspend fun deviceIdle(off: Boolean): String = withContext(Dispatchers.IO) {
+        Sh.run("cmd deviceidle ${if (off) "disable all" else "enable all"}").ifBlank { "Deviceidle (Doze) ${if (off) "band (battery zyada jaye ga)" else "wapas on"}" }
+    }
+
+    suspend fun killAll(): String = withContext(Dispatchers.IO) {
+        Sh.run("am kill-all").ifBlank { "am kill-all: cached/background processes band (foreground apps nahi)" }
+    }
+
+    suspend fun powerExtras(on: Boolean): String = withContext(Dispatchers.IO) {
+        if (on) {
+            Sh.run("cmd power set-adaptive-power-saver-enabled false")
+            Sh.run("settings put global low_power 0")
+            Sh.run("cmd power set-fixed-performance-mode-enabled true")
+        } else {
+            Sh.run("cmd power set-fixed-performance-mode-enabled false")
+            Sh.run("cmd power set-adaptive-power-saver-enabled true")
+        }
+        "Power extras ${if (on) "ON: adaptive saver off, low power off, fixed performance" else "OFF: default"}"
     }
 }
