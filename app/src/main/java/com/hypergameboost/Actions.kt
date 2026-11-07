@@ -554,7 +554,7 @@ object Actions {
             thermalOverride(false), standby(false), haptics(false), edgeGesture(false),
             wifiTweaks(false), phantom(false), saturation(null), dns("auto"),
             headsUp(false), brightnessLock(false), suspendSocial(false), gamePerf(game, false), captivePortal(false), firewallRevertIfOn(),
-            applyProfile(Profile.BALANCED, game), resetResolution(), looperStats(false), deviceIdle(false), dcDimming(false)
+            applyProfile(Profile.BALANCED, game), smartBoostStop(), resetResolution(), looperStats(false), deviceIdle(false), dcDimming(false)
         ).joinToString("\n")
     }
 
@@ -678,5 +678,45 @@ object Actions {
         val before = Sh.run("du -sk $dir 2>/dev/null | cut -f1")
         Sh.run("find $dir -type f -delete 2>/dev/null")
         "Logs saaf: $dir (pehle ${before.ifBlank { "?" }} KB)"
+    }
+
+    // ---- Smart Boost: tabhi max clocks jab phone thanda ho, garam hote hi khud band ----
+
+    @Volatile var smartBoostOn = false
+
+    suspend fun batteryTempC(): Double? = withContext(Dispatchers.IO) {
+        Regex("""temperature:\s*(\d+)""").find(Sh.run("dumpsys battery"))?.groupValues?.get(1)?.toIntOrNull()?.let { it / 10.0 }
+    }
+
+    /** Har poll par chalta hai. <=39.0C: fixed performance ON, >=41.5C: OFF (thandha hone par phir ON). */
+    suspend fun smartBoostTick(): String {
+        val t = batteryTempC() ?: return "temp parh nahi saka"
+        return if (!smartBoostOn && t <= 39.0) {
+            Sh.run("cmd power set-fixed-performance-mode-enabled true"); smartBoostOn = true
+            "Smart Boost ON (temp $t C)"
+        } else if (smartBoostOn && t >= 41.5) {
+            Sh.run("cmd power set-fixed-performance-mode-enabled false"); smartBoostOn = false
+            "Smart Boost OFF, phone garam ($t C)"
+        } else "Smart Boost ${if (smartBoostOn) "ON" else "OFF"} ($t C)"
+    }
+
+    suspend fun smartBoostStop(): String = withContext(Dispatchers.IO) {
+        smartBoostOn = false
+        Sh.run("cmd power set-fixed-performance-mode-enabled false")
+        "Smart Boost band"
+    }
+
+    /** PUBG ki asli config/save files dhoondhta hai (sirf parhta hai, kuch badalta nahi). */
+    suspend fun findGameFiles(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        val base = "/sdcard/Android/data/$g"
+        val sb = StringBuilder()
+        sb.appendLine("Base: $base")
+        sb.appendLine(Sh.run("ls -la '$base' 2>&1 | head -20"))
+        sb.appendLine("--- .sav / .ini files ---")
+        sb.appendLine(Sh.run("find '$base' -maxdepth 9 \\( -iname '*.sav' -o -iname '*.ini' \\) -exec ls -la {} \\; 2>&1 | head -60").ifBlank { "Koi .sav/.ini nahi mili (game ek baar poora chalayein)" })
+        sb.appendLine("--- SaveGames folders ---")
+        sb.appendLine(Sh.run("find '$base' -maxdepth 9 -type d -iname 'SaveGames' 2>&1 | head -10"))
+        sb.toString()
     }
 }
