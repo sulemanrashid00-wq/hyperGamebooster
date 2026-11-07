@@ -555,7 +555,7 @@ object Actions {
             thermalOverride(false), standby(false), haptics(false), edgeGesture(false),
             wifiTweaks(false), phantom(false), saturation(null), dns("auto"),
             headsUp(false), brightnessLock(false), suspendSocial(false), gamePerf(game, false), captivePortal(false), firewallRevertIfOn(),
-            applyProfile(Profile.BALANCED, game), resetResolution(), looperStats(false), deviceIdle(false)
+            applyProfile(Profile.BALANCED, game), resetResolution(), looperStats(false), deviceIdle(false), dcDimming(false)
         ).joinToString("\n")
     }
 
@@ -648,5 +648,38 @@ object Actions {
             Sh.run("cmd power set-adaptive-power-saver-enabled true")
         }
         "Power extras ${if (on) "ON: adaptive saver off, low power off, fixed performance" else "OFF: default"}"
+    }
+
+    // ---- Real, safe extras ----
+
+    @Volatile private var dcBefore: String? = null
+
+    /** MIUI/HyperOS DC dimming: touch/FPS par asar ho sakta hai. Pehle ki value yaad rakhi jati hai. */
+    suspend fun dcDimming(off: Boolean): String = withContext(Dispatchers.IO) {
+        if (off) {
+            if (dcBefore == null) dcBefore = Sh.run("settings get system dc_back_light")
+            Sh.run("settings put system dc_back_light 0")
+            "DC dimming OFF (pehle: ${dcBefore})"
+        } else {
+            val b = dcBefore
+            if (b == null || b == "null" || b.isBlank() || b.startsWith("ERROR")) Sh.run("settings delete system dc_back_light")
+            else Sh.run("settings put system dc_back_light $b")
+            dcBefore = null
+            "DC dimming wapas (pehle jaisa)"
+        }
+    }
+
+    /** Match se pehle Android ka pending disk maintenance khatam karwa deta hai. */
+    suspend fun idleMaintenance(): String = withContext(Dispatchers.IO) {
+        Sh.run("cmd activity idle-maintenance").ifBlank { "Idle maintenance chala diya" }
+    }
+
+    /** Sirf PUBG ke Logs folder ke andar ki files (config / saves ko nahi chhoota). */
+    suspend fun cleanGameLogs(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        val dir = "/sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Logs"
+        val before = Sh.run("du -sk $dir 2>/dev/null | cut -f1")
+        Sh.run("find $dir -type f -delete 2>/dev/null")
+        "Logs saaf: $dir (pehle ${before.ifBlank { "?" }} KB)"
     }
 }
