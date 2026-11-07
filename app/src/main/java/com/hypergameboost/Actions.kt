@@ -608,14 +608,20 @@ object Actions {
      *  mode: "smooth" = landscape width ghatao (height wahi) -> kam pixels = halka GPU load. level: low/med/high */
     suspend fun stretchResolution(mode: String, level: String): String = withContext(Dispatchers.IO) {
         val (pw, ph) = parseWH(Sh.run("wm size"), "Physical size") ?: return@withContext "Screen size parse nahi hui"
-        val f = when (level) { "low" -> 1; "med" -> 2; "high" -> 3; else -> return@withContext "Default: original" }
-        val (w, h) = if (mode == "sens") {
-            ((pw * (100 + 5 * f) / 100) / 2 * 2) to ph
-        } else {
-            pw to ((ph * (100 - 7 * f) / 100) / 2 * 2)
+        val pd = Regex("""Physical density:\s*(\d+)""").find(Sh.run("wm density"))?.groupValues?.get(1)?.toInt()
+        val f = when (level) { "low" -> 1; "med" -> 2; "high" -> 3; else -> 0 }
+        val (w, h) = when (mode) {
+            "ipad" -> pw to ((pw * 4 / 3) / 2 * 2)
+            "sens" -> ((pw * (100 + 5 * f) / 100) / 2 * 2) to ph
+            else -> pw to ((ph * (100 - 7 * f) / 100) / 2 * 2)
         }
         val out = Sh.run("wm size ${w}x$h")
-        "Stretch ${if (mode == "sens") "Sensitivity" else "Smoothness"} $level: ${w}x$h (original ${pw}x$ph) $out".trim()
+        // UltDroid bhi resolution ke saath "perfect density" lagata hai, warna UI kat/chhoti ho jati hai.
+        val dens = if (pd != null) {
+            val d = (pd * ((w.toDouble() / pw) + (h.toDouble() / ph)) / 2).toInt().coerceIn(240, 800)
+            Sh.run("wm density $d"); d
+        } else null
+        "Stretch $mode $level: ${w}x$h (original ${pw}x$ph), density ${dens ?: "?"} $out".trim()
     }
 
     // ---- UltDroid ke Performance tab ki asli commands ----
