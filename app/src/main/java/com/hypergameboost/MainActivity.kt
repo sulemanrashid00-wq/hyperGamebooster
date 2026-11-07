@@ -217,7 +217,7 @@ fun App() {
                     }
                     Section("1-Tap Boost") {
                         Button(enabled = can, onClick = { run { Actions.esportsMode(selected, ctx.packageName) } }) { Text("ACTIVATE ESPORTS MODE") }
-                        Text("Thermal override + 120Hz + Performance + DND + Wi-Fi low latency + keep-alive + RAM clean", style = MaterialTheme.typography.bodySmall)
+                        Text("120Hz + Game Mode Performance + DND + Wi-Fi low latency + keep-alive + social apps suspend (garam nahi karta, WhatsApp nahi chhedta)", style = MaterialTheme.typography.bodySmall)
                         Button(enabled = can, onClick = {
                             run {
                                 val a = Actions.esportsMode(selected, ctx.packageName)
@@ -379,7 +379,7 @@ fun App() {
                         Text("WhatsApp/Insta/TikTok/Snapchat/Telegram background mein band, game ko VIP standby bucket. Game ke baad Restore se wapas.", style = MaterialTheme.typography.bodySmall)
                     }
                     Section("Extra performance (UltDroid wali)") {
-                        OnOff("Fixed performance + adaptive saver off + low power off", can, { run { Actions.powerExtras(true) } }, { run { Actions.powerExtras(false) } })
+                        OnOff("Adaptive saver off + low power off", can, { run { Actions.powerExtras(true) } }, { run { Actions.powerExtras(false) } })
                         OnOff("Looper stats band (thora halka CPU)", can, { run { Actions.looperStats(true) } }, { run { Actions.looperStats(false) } })
                         OnOff("Doze (deviceidle) band (battery zyada khayega)", can, { run { Actions.deviceIdle(true) } }, { run { Actions.deviceIdle(false) } })
                         OutlinedButton(enabled = can, onClick = { run { Actions.killAll() } }) { Text("am kill-all (background saaf)") }
