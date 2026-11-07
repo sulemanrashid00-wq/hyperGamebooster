@@ -79,7 +79,7 @@ class AutoService : Service() {
                     missing = 0
                 }
             }
-            delay(if (active) 8000L else 4000L)
+            delay(if (active) 10000L else 6000L)
         }
     }
 
