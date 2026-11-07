@@ -425,6 +425,10 @@ fun App() {
                             OutlinedButton(onClick = { AudioTest.play(1) }) { Text("Sirf RIGHT") }
                         }
                         Text("Sahi hone par left dabane par sirf left kaan mein awaaz aani chahiye.", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { log = AudioTest.footstepEq(true) }) { Text("Sound preset ON") }
+                            OutlinedButton(onClick = { log = AudioTest.footstepEq(false) }) { Text("OFF") }
+                        }
                     }
                 }
 
