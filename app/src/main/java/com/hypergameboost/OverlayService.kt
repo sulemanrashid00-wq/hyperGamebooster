@@ -11,13 +11,13 @@ import android.content.pm.ServiceInfo
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.PowerManager
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -47,23 +47,31 @@ object CrosshairSettings {
     @Volatile var offsetY: Int = 0 // -30 to +30 px
     @Volatile var sizePx: Int = 24 // 10 to 50 px
     @Volatile var colorHex: String = "#00FF66"
-    @Volatile var style: Int = 0 // 0: Off, 1: Dot, 2: Cross, 3: Circle+Cross
+    @Volatile var style: Int = 0 // 0: Off, 1: Dot, 2: Cross, 3: Circle+Cross, 4: T-Cross, 5: Chevron, 6: Rangefinder
     @Volatile var rfTargetX: Int = 1800
     @Volatile var rfTargetY: Int = 600
     @Volatile var magnifierScale: Float = 2.5f
     @Volatile var floatingAppPkg: String = "com.whatsapp"
+
+    // ASUS ROG & Black Shark Hardware Volume AirTriggers
+    @Volatile var isVolumeTriggerEnabled: Boolean = false
+    @Volatile var l1TargetX: Int = 350 // Default Scope/Aim location
+    @Volatile var l1TargetY: Int = 450
+    @Volatile var r1TargetX: Int = 1800 // Default Fire button location
+    @Volatile var r1TargetY: Int = 600
+    @Volatile var showTriggerPins: Boolean = false
 }
 
 /**
- * OverlayService - Esports HUD Suite (v3.0 Ultimate)
- * 1. Real-Time FPS, 1% Low FPS, Frame-Time ms, Battery Watts & Socket Ping
- * 2. RedMagic Sonic Radar (Live footstep threat compass)
- * 3. RedMagic 2x/4x Hardware Sniper Magnifier (ZOOM button)
+ * OverlayService - Esports HUD Suite & RedMagic Cyber Gaming Dock (v6.0 Esports Master)
+ * 1. Real-Time Telemetry HUD: Real FPS, 1% Low, Frame-Time (ms), Battery Watts, Socket Ping, Sonic Threat
+ * 2. RedMagic Sliding Cyber Dock: Expandable edge handle over PUBG with VIP quick toggles
+ * 3. ASUS ROG Hardware Volume L1/R1 AirTriggers & Draggable On-Screen Pins
  * 4. ASUS ROG DMR Rapid-Fire Floating Macro (⚡RF trigger button)
- * 5. Freeform Mini-App Launcher (MINI button for PiP WhatsApp/Browser)
- * 6. Pixel-Aligned Crosshair with X/Y fine-tuning, Size & Color controls
- * 7. Auxiliary Grenade Trajectory line guide
- * 8. AMOLED #000000 AFK Pocket Lock (90% battery saver)
+ * 5. 6 Pro Crosshair Styles (Dot, Cross, Circle+Dot, T-Cross, Chevron, Rangefinder) + RGB switcher
+ * 6. Tactical Audio Hunter Quick Selector (Footstep, Gunshot, Vehicle, Pro Flat)
+ * 7. Freeform Mini-App Launcher (WhatsApp/Chrome PiP)
+ * 8. AMOLED #000000 AFK Pocket Lock & Realme 45s Flash Return countdown
  */
 class OverlayService : Service() {
     private lateinit var wm: WindowManager
@@ -72,12 +80,15 @@ class OverlayService : Service() {
 
     // Overlays
     private var hudView: TextView? = null
-    private var panelView: LinearLayout? = null
+    private var dockHandleView: TextView? = null
+    private var dockExpandedView: LinearLayout? = null
     private var crosshairView: View? = null
     private var auxLineView: View? = null
     private var hapticFireRingView: View? = null
     private var rfMacroButtonView: View? = null
     private var afkView: FrameLayout? = null
+    private var l1PinView: View? = null
+    private var r1PinView: View? = null
 
     private var hudJob: Job? = null
     private var rfJob: Job? = null
@@ -85,10 +96,6 @@ class OverlayService : Service() {
     private var layer: String? = null
 
     // Tools state
-    private var swRunning = false
-    private var swElapsed = 0L
-    private var swStartedAt = 0L
-    private var killTally = 0
     private var showAuxLine = false
     private var showFireRing = false
     private var showRfMacro = false
@@ -123,7 +130,7 @@ class OverlayService : Service() {
         layer = null
 
         if (wantHud) showHud() else removeHud()
-        if (wantTools) showTools() else removeTools()
+        if (wantTools) showCyberDock() else removeCyberDock()
 
         CrosshairSettings.style = wantCrosshair
         updateCrosshair()
@@ -134,6 +141,8 @@ class OverlayService : Service() {
         showFireRing = wantFire
         updateFireRing()
 
+        updateTriggerPins()
+
         return START_NOT_STICKY
     }
 
@@ -141,8 +150,8 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Esports Overlay", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v3.0 Active")
-            .setContentText("Esports Telemetry & Macro Engines Running")
+            .setContentTitle("HyperGameBooster v6.0 Active")
+            .setContentText("RedMagic Cyber Dock & AirTriggers Running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -162,9 +171,9 @@ class OverlayService : Service() {
         val tv = TextView(this).apply {
             setTextColor(Color.parseColor("#00E676"))
             textSize = 10f
-            setBackgroundColor(Color.argb(190, 10, 14, 22))
-            setPadding(14, 8, 14, 8)
-            text = "⚡ INITIALIZING ESPORTS HUD..."
+            setBackgroundColor(Color.argb(205, 8, 12, 17))
+            setPadding(16, 8, 16, 8)
+            text = "⚡ ESPORTS TELEMETRY ACTIVE"
         }
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -176,8 +185,8 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 20
-            y = 20
+            x = 24
+            y = 24
         }
         wm.addView(tv, lp)
         hudView = tv
@@ -195,27 +204,23 @@ class OverlayService : Service() {
     private suspend fun hudLoop() {
         var tick = 0
         var pingStr = "--ms"
-        var lastFpsReport = FpsReport(120.0, 112.0, 8.3)
+        var lastFpsReport = FpsReport(120.0, 114.0, 8.3)
 
         while (currentCoroutineContext().isActive) {
-            // Live Socket Ping (every 2.5s)
             if (tick % 2 == 0) {
                 val ping = NativeTools.measureSocketPing("1.1.1.1", 53, 1000)
                 pingStr = if (ping > 0) "${ping}ms" else "--ms"
             }
 
-            // Battery and Thermal
             val b = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             val temp = (b?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f
             val powerDrain = NativeTools.getBatteryPowerDrain(this@OverlayService)
 
-            // Measure Real FPS & 1% Low from SurfaceFlinger
             val report = measureRealFps()
             if (report.liveFps > 0.0) {
                 lastFpsReport = report
             }
 
-            // Sonic Radar Threat Indicator
             val threat = AudioTest.currentThreatLevel
             val sonicBars = when {
                 threat >= 75 -> "🔊 [||||||||] ⚠️"
@@ -231,7 +236,7 @@ class OverlayService : Service() {
                 hudView?.let { v ->
                     v.text = hudContent
                     if (threat >= 75) {
-                        v.setTextColor(Color.parseColor("#FF1744")) // Flash red when heavy footsteps/shots detected
+                        v.setTextColor(Color.parseColor("#FF1744"))
                     } else {
                         v.setTextColor(Color.parseColor("#00E676"))
                     }
@@ -253,129 +258,31 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 2. Esports Tactical Tools Panel (Stopwatch, Kills, ZOOM, FIRE Macro, MINI App)
+    // 2. RedMagic Sliding Cyber VIP Gaming Dock (Handle + Sliding Panel)
     // =========================================================================
-    private fun showTools() {
-        if (panelView != null) return
+    private fun showCyberDock() {
+        if (dockHandleView != null) return
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.argb(225, 14, 18, 26))
-            setPadding(12, 8, 12, 8)
-        }
-
-        val header = TextView(this).apply {
-            text = "⚡ HYPER ESPORTS TOOLS (TAP)"
-            setTextColor(Color.parseColor("#00E5FF"))
-            textSize = 11f
-            setPadding(4, 4, 4, 4)
-        }
-
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-
-        val swText = TextView(this).apply {
-            text = "00:00"
-            setTextColor(Color.WHITE)
+        // Subtle edge pill handle (Default on right edge)
+        val handle = TextView(this).apply {
+            text = "⚡"
+            setTextColor(Color.parseColor("#00E676"))
             textSize = 14f
-            setPadding(0, 0, 8, 0)
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(220, 10, 16, 24))
+            setPadding(12, 20, 12, 20)
         }
 
-        val tallyText = TextView(this).apply {
-            text = "Kills: $killTally"
-            setTextColor(Color.parseColor("#FFD600"))
-            textSize = 14f
-            setPadding(0, 0, 8, 0)
-        }
-
-        // Row 1: Stopwatch
-        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row1.addView(swText)
-        row1.addView(createBtn("Start/Stop") {
-            if (swRunning) {
-                swElapsed += SystemClock.elapsedRealtime() - swStartedAt
-                swRunning = false
-            } else {
-                swStartedAt = SystemClock.elapsedRealtime()
-                swRunning = true
-            }
-        })
-        row1.addView(createBtn("Reset") {
-            swRunning = false
-            swElapsed = 0L
-        })
-
-        // Row 2: Kill Tally
-        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row2.addView(tallyText)
-        row2.addView(createBtn("+") { killTally++; tallyText.text = "Kills: $killTally" })
-        row2.addView(createBtn("-") { if (killTally > 0) killTally--; tallyText.text = "Kills: $killTally" })
-        row2.addView(createBtn("0") { killTally = 0; tallyText.text = "Kills: 0" })
-
-        // Row 3: ZOOM, FIRE Macro & MINI Floating App
-        val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row3.addView(createBtn(if (Actions.isMagnifierOn) "ZOOM: ON" else "ZOOM: OFF") {
-            scope.launch {
-                val next = !Actions.isMagnifierOn
-                Actions.setMagnifier(next, CrosshairSettings.magnifierScale)
-                ui.post { (it as? Button)?.text = if (next) "ZOOM: ON" else "ZOOM: OFF" }
-            }
-        })
-        row3.addView(createBtn(if (showRfMacro) "FIRE: ON" else "FIRE: OFF") {
-            showRfMacro = !showRfMacro
-            updateRfMacroButton()
-            (it as? Button)?.text = if (showRfMacro) "FIRE: ON" else "FIRE: OFF"
-        })
-        row3.addView(createBtn("MINI") {
-            scope.launch {
-                Actions.launchFloatingMiniApp(CrosshairSettings.floatingAppPkg)
-            }
-        })
-
-        // Row 4: Crosshairs & Tactical Helpers
-        val row4 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row4.addView(createBtn("Crosshair: ${crosshairName()}") {
-            CrosshairSettings.style = (CrosshairSettings.style + 1) % 4
-            updateCrosshair()
-            (it as? Button)?.text = "Crosshair: ${crosshairName()}"
-        })
-        row4.addView(createBtn(if (showAuxLine) "Aux: ON" else "Aux: OFF") {
-            showAuxLine = !showAuxLine
-            updateAuxLine()
-            (it as? Button)?.text = if (showAuxLine) "Aux: ON" else "Aux: OFF"
-        })
-
-        // Row 5: 4D Ring, AFK Lock & Screenshot
-        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row5.addView(createBtn(if (showFireRing) "4D Ring: ON" else "4D Ring: OFF") {
-            showFireRing = !showFireRing
-            updateFireRing()
-            (it as? Button)?.text = if (showFireRing) "4D Ring: ON" else "4D Ring: OFF"
-        })
-        row5.addView(createBtn("AFK Lock") { showAfk() })
-        row5.addView(createBtn("Screenshot") { takeScreenshot() })
-
-        body.addView(row1)
-        body.addView(row2)
-        body.addView(row3)
-        body.addView(row4)
-        body.addView(row5)
-
-        root.addView(header)
-        root.addView(body)
-
-        val lp = WindowManager.LayoutParams(
+        val handleLp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 20
-            y = 200
+            x = 0
+            y = 300
         }
 
         var downX = 0f
@@ -384,13 +291,13 @@ class OverlayService : Service() {
         var startY = 0
         var isMove = false
 
-        header.setOnTouchListener { _, e ->
+        handle.setOnTouchListener { _, e ->
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
-                    startX = lp.x
-                    startY = lp.y
+                    startX = handleLp.x
+                    startY = handleLp.y
                     isMove = false
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -398,61 +305,267 @@ class OverlayService : Service() {
                     val dy = e.rawY - downY
                     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) isMove = true
                     if (isMove) {
-                        lp.x = startX + dx.toInt()
-                        lp.y = startY + dy.toInt()
-                        wm.updateViewLayout(root, lp)
+                        handleLp.x = (startX + dx).toInt().coerceAtLeast(0)
+                        handleLp.y = (startY + dy).toInt().coerceAtLeast(0)
+                        wm.updateViewLayout(handle, handleLp)
                     }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!isMove) {
-                        body.visibility = if (body.visibility == View.GONE) View.VISIBLE else View.GONE
+                        toggleExpandedDock(handleLp.y)
                     }
                 }
             }
             true
         }
 
-        wm.addView(root, lp)
-        panelView = root
-
-        // Stopwatch ticker
-        ui.post(object : Runnable {
-            override fun run() {
-                if (panelView == null) return
-                val ms = swElapsed + if (swRunning) SystemClock.elapsedRealtime() - swStartedAt else 0L
-                val sec = ms / 1000
-                swText.text = "%02d:%02d".format(sec / 60, sec % 60)
-                ui.postDelayed(this, 500)
-            }
-        })
+        wm.addView(handle, handleLp)
+        dockHandleView = handle
     }
 
-    private fun removeTools() {
-        panelView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
-        panelView = null
+    private fun toggleExpandedDock(anchorY: Int) {
+        if (dockExpandedView != null) {
+            removeExpandedDock()
+            return
+        }
+
+        val dock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.argb(240, 9, 13, 20))
+            setPadding(14, 12, 14, 12)
+        }
+
+        val header = TextView(this).apply {
+            text = "⚡ REDMAGIC VIP GAME SPACE"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 12f
+            setPadding(4, 4, 4, 8)
+        }
+        dock.addView(header)
+
+        // Row 1: Fast RAM Boost & Sniper Zoom
+        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row1.addView(createCyberBtn("⚡ Boost RAM") {
+            scope.launch {
+                Actions.compactMemoryAndPurgeCaches()
+                ui.post { Toast.makeText(this@OverlayService, "⚡ RAM Compacted & Cache Dropped!", Toast.LENGTH_SHORT).show() }
+            }
+        })
+        row1.addView(createCyberBtn(if (Actions.isMagnifierOn) "🔍 Zoom: ON" else "🔍 Zoom: OFF") {
+            scope.launch {
+                val next = !Actions.isMagnifierOn
+                Actions.setMagnifier(next, CrosshairSettings.magnifierScale)
+                ui.post { (it as? Button)?.text = if (next) "🔍 Zoom: ON" else "🔍 Zoom: OFF" }
+            }
+        })
+        dock.addView(row1)
+
+        // Row 2: Volume L1/R1 AirTriggers & Pin Mover
+        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row2.addView(createCyberBtn(if (CrosshairSettings.isVolumeTriggerEnabled) "🎮 Vol L1/R1: ON" else "🎮 Vol L1/R1: OFF") {
+            CrosshairSettings.isVolumeTriggerEnabled = !CrosshairSettings.isVolumeTriggerEnabled
+            (it as? Button)?.text = if (CrosshairSettings.isVolumeTriggerEnabled) "🎮 Vol L1/R1: ON" else "🎮 Vol L1/R1: OFF"
+            Toast.makeText(this@OverlayService, "Volume Triggers: ${if (CrosshairSettings.isVolumeTriggerEnabled) "ACTIVE" else "OFF"}", Toast.LENGTH_SHORT).show()
+        })
+        row2.addView(createCyberBtn(if (CrosshairSettings.showTriggerPins) "📍 Pins: ON" else "📍 Pins: OFF") {
+            CrosshairSettings.showTriggerPins = !CrosshairSettings.showTriggerPins
+            updateTriggerPins()
+            (it as? Button)?.text = if (CrosshairSettings.showTriggerPins) "📍 Pins: ON" else "📍 Pins: OFF"
+        })
+        dock.addView(row2)
+
+        // Row 3: Rapid-Fire Macro & Crosshair Style
+        val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row3.addView(createCyberBtn(if (showRfMacro) "⚡ RF: ON" else "⚡ RF: OFF") {
+            showRfMacro = !showRfMacro
+            updateRfMacroButton()
+            (it as? Button)?.text = if (showRfMacro) "⚡ RF: ON" else "⚡ RF: OFF"
+        })
+        row3.addView(createCyberBtn("🎯 Reticle: ${crosshairName()}") {
+            CrosshairSettings.style = (CrosshairSettings.style + 1) % 7
+            updateCrosshair()
+            (it as? Button)?.text = "🎯 Reticle: ${crosshairName()}"
+        })
+        dock.addView(row3)
+
+        // Row 4: Floating Mini-App & 45s Flash Return
+        val row4 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row4.addView(createCyberBtn("📱 Mini App") {
+            scope.launch { Actions.launchFloatingMiniApp(CrosshairSettings.floatingAppPkg) }
+        })
+        row4.addView(createCyberBtn("⏳ 45s Lobby") {
+            startService(Intent(this, LobbyTimerService::class.java).putExtra(LobbyTimerService.EXTRA_GAME, game))
+        })
+        dock.addView(row4)
+
+        // Row 5: AMOLED AFK Lock & Tactical Audio Preset
+        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
+        row5.addView(createCyberBtn("🎧 Audio: ${audioPresetName()}") {
+            val next = (AudioTest.activePreset + 1) % 5
+            val msg = AudioTest.applyPreset(next)
+            (it as? Button)?.text = "🎧 Audio: ${audioPresetName()}"
+            Toast.makeText(this@OverlayService, msg, Toast.LENGTH_SHORT).show()
+        })
+        dock.addView(row5)
+
+        // Row 6: Screenshot & Close
+        val row6 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row6.addView(createCyberBtn("📸 Screenshot") { takeScreenshot() })
+        row6.addView(createCyberBtn("❌ Close") { removeExpandedDock() })
+        dock.addView(row6)
+
+        val dockLp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 70
+            y = (anchorY - 50).coerceAtLeast(40)
+        }
+
+        wm.addView(dock, dockLp)
+        dockExpandedView = dock
+    }
+
+    private fun removeExpandedDock() {
+        dockExpandedView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        dockExpandedView = null
+    }
+
+    private fun removeCyberDock() {
+        removeExpandedDock()
+        dockHandleView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        dockHandleView = null
+    }
+
+    private fun audioPresetName(): String = when (AudioTest.activePreset) {
+        1 -> "Footstep"
+        2 -> "Gunshot"
+        3 -> "Vehicle"
+        4 -> "Pro Flat"
+        else -> "Stock"
     }
 
     private fun crosshairName(): String = when (CrosshairSettings.style) {
         1 -> "Dot"
         2 -> "Cross"
         3 -> "Circle"
+        4 -> "T-Cross"
+        5 -> "Chevron"
+        6 -> "Sniper"
         else -> "OFF"
     }
 
-    private fun createBtn(label: String, onClick: (View) -> Unit): Button = Button(this).apply {
+    private fun createCyberBtn(label: String, onClick: (View) -> Unit): Button = Button(this).apply {
         text = label
         isAllCaps = false
         textSize = 10f
+        setTextColor(Color.WHITE)
+        setBackgroundColor(Color.argb(190, 20, 28, 42))
         minHeight = 0
         minimumHeight = 0
         minWidth = 0
         minimumWidth = 0
-        setPadding(10, 4, 10, 4)
+        setPadding(12, 6, 12, 6)
         setOnClickListener { onClick(it) }
     }
 
     // =========================================================================
-    // 3. ASUS ROG "Rapid-Fire DMR Macro" Floating Button (⚡RF)
+    // 3. Draggable On-Screen Pins for Volume L1 (Aim) & R1 (Fire)
+    // =========================================================================
+    fun updateTriggerPins() {
+        l1PinView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        r1PinView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        l1PinView = null
+        r1PinView = null
+
+        if (!CrosshairSettings.showTriggerPins) return
+
+        // Pin L1 (AIM)
+        val l1View = TextView(this).apply {
+            text = "L1:AIM"
+            textSize = 11f
+            setTextColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#00E5FF"))
+            gravity = Gravity.CENTER
+            setPadding(8, 6, 8, 6)
+        }
+        val l1Lp = WindowManager.LayoutParams(
+            110, 80,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = CrosshairSettings.l1TargetX
+            y = CrosshairSettings.l1TargetY
+        }
+        makeDraggablePin(l1View, l1Lp) { x, y ->
+            CrosshairSettings.l1TargetX = x
+            CrosshairSettings.l1TargetY = y
+        }
+        wm.addView(l1View, l1Lp)
+        l1PinView = l1View
+
+        // Pin R1 (FIRE)
+        val r1View = TextView(this).apply {
+            text = "R1:FIRE"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#FF1744"))
+            gravity = Gravity.CENTER
+            setPadding(8, 6, 8, 6)
+        }
+        val r1Lp = WindowManager.LayoutParams(
+            110, 80,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = CrosshairSettings.r1TargetX
+            y = CrosshairSettings.r1TargetY
+        }
+        makeDraggablePin(r1View, r1Lp) { x, y ->
+            CrosshairSettings.r1TargetX = x
+            CrosshairSettings.r1TargetY = y
+        }
+        wm.addView(r1View, r1Lp)
+        r1PinView = r1View
+    }
+
+    private fun makeDraggablePin(view: View, lp: WindowManager.LayoutParams, onMoved: (Int, Int) -> Unit) {
+        var downX = 0f
+        var downY = 0f
+        var startX = 0
+        var startY = 0
+        view.setOnTouchListener { _, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = e.rawX
+                    downY = e.rawY
+                    startX = lp.x
+                    startY = lp.y
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = e.rawX - downX
+                    val dy = e.rawY - downY
+                    lp.x = (startX + dx).toInt().coerceAtLeast(0)
+                    lp.y = (startY + dy).toInt().coerceAtLeast(0)
+                    wm.updateViewLayout(view, lp)
+                    onMoved(lp.x, lp.y)
+                }
+            }
+            true
+        }
+    }
+
+    // =========================================================================
+    // 4. ASUS ROG "Rapid-Fire DMR Macro" Floating Button (⚡RF)
     // =========================================================================
     private fun updateRfMacroButton() {
         rfMacroButtonView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
@@ -466,13 +579,12 @@ class OverlayService : Service() {
             setTextColor(Color.WHITE)
             textSize = 14f
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.argb(220, 255, 61, 0)) // Orange red glow
+            setBackgroundColor(Color.argb(220, 255, 61, 0))
             setPadding(16, 12, 16, 12)
         }
 
         val lp = WindowManager.LayoutParams(
-            130,
-            130,
+            130, 130,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -496,12 +608,11 @@ class OverlayService : Service() {
                     startX = lp.x
                     startY = lp.y
                     moved = false
-                    // Start 12 Taps/sec Rapid-Fire burst loop
                     rfJob?.cancel()
                     rfJob = scope.launch {
                         while (currentCoroutineContext().isActive) {
                             Shell.run("input tap ${CrosshairSettings.rfTargetX} ${CrosshairSettings.rfTargetY}")
-                            delay(83) // ~12 taps per second
+                            delay(83) // 12 taps per second
                         }
                     }
                 }
@@ -528,7 +639,7 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 4. Pixel Fine-Tuned Esports Custom Crosshairs (X/Y Offsets, Size, RGB)
+    // 5. Pixel Fine-Tuned 6-Shape Crosshairs (Dot, Cross, Circle, T-Cross, Chevron, Rangefinder)
     // =========================================================================
     fun updateCrosshair() {
         crosshairView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
@@ -554,10 +665,10 @@ class OverlayService : Service() {
                 val s = CrosshairSettings.sizePx.toFloat()
 
                 when (CrosshairSettings.style) {
-                    1 -> { // Dot
+                    1 -> { // 1. Minimal Dot
                         canvas.drawCircle(cx, cy, (s / 4f).coerceAtLeast(3f), fillPaint)
                     }
-                    2 -> { // Tactical Cross
+                    2 -> { // 2. Tactical Cross
                         val half = s / 2f
                         val gap = (s / 6f).coerceAtLeast(3f)
                         canvas.drawLine(cx - half, cy, cx - gap, cy, strokePaint)
@@ -566,7 +677,7 @@ class OverlayService : Service() {
                         canvas.drawLine(cx, cy + gap, cx, cy + half, strokePaint)
                         canvas.drawCircle(cx, cy, 2f, fillPaint)
                     }
-                    3 -> { // Circle + Cross
+                    3 -> { // 3. Circle + Cross
                         val r = (s / 2.5f).coerceAtLeast(6f)
                         canvas.drawCircle(cx, cy, r, strokePaint)
                         val half = s / 1.5f
@@ -577,14 +688,41 @@ class OverlayService : Service() {
                         canvas.drawLine(cx, cy + gap, cx, cy + half, strokePaint)
                         canvas.drawCircle(cx, cy, 2.5f, fillPaint)
                     }
+                    4 -> { // 4. T-Cross (Headshot Focused)
+                        val half = s / 2f
+                        val gap = (s / 6f).coerceAtLeast(3f)
+                        canvas.drawLine(cx - half, cy, cx - gap, cy, strokePaint)
+                        canvas.drawLine(cx + gap, cy, cx + half, cy, strokePaint)
+                        canvas.drawLine(cx, cy + gap, cx, cy + half, strokePaint)
+                        canvas.drawCircle(cx, cy, 2f, fillPaint)
+                    }
+                    5 -> { // 5. Chevron / Diamond Reticle
+                        val p = Path().apply {
+                            moveTo(cx, cy - (s / 2.5f))
+                            lineTo(cx + (s / 3f), cy + (s / 3f))
+                            lineTo(cx, cy + (s / 6f))
+                            lineTo(cx - (s / 3f), cy + (s / 3f))
+                            close()
+                        }
+                        canvas.drawPath(p, fillPaint)
+                    }
+                    6 -> { // 6. Sniper Rangefinder
+                        val half = s / 1.5f
+                        canvas.drawLine(cx - half, cy, cx + half, cy, strokePaint)
+                        canvas.drawLine(cx, cy - half, cx, cy + half, strokePaint)
+                        for (i in 1..3) {
+                            val dy = cy + (i * s / 4f)
+                            val w = half / (i + 1)
+                            canvas.drawLine(cx - w, dy, cx + w, dy, strokePaint)
+                        }
+                    }
                 }
             }
         }
 
-        val boxSize = (CrosshairSettings.sizePx * 2).coerceAtLeast(100)
+        val boxSize = (CrosshairSettings.sizePx * 2.5f).toInt().coerceAtLeast(100)
         val lp = WindowManager.LayoutParams(
-            boxSize,
-            boxSize,
+            boxSize, boxSize,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -601,12 +739,11 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 5. Auxiliary Grenade Trajectory Line Guide
+    // 6. Auxiliary Trajectory & Haptic Ring
     // =========================================================================
     private fun updateAuxLine() {
         auxLineView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
         auxLineView = null
-
         if (!showAuxLine) return
 
         val av = object : View(this) {
@@ -644,22 +781,16 @@ class OverlayService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
-
         wm.addView(av, lp)
         auxLineView = av
     }
 
-    // =========================================================================
-    // 6. 4D Haptic Fire Ring (Draggable Heavy-Click On-Screen Trigger)
-    // =========================================================================
     private fun updateFireRing() {
         hapticFireRingView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
         hapticFireRingView = null
-
         if (!showFireRing) return
 
         val vib = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-
         val ringView = object : View(this) {
             private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.argb(190, 255, 40, 40)
@@ -681,8 +812,7 @@ class OverlayService : Service() {
 
         val ringSize = 150
         val lp = WindowManager.LayoutParams(
-            ringSize,
-            ringSize,
+            ringSize, ringSize,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -732,7 +862,7 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 7. AMOLED #000000 AFK Pocket Lock (90% Battery Saver)
+    // 7. AMOLED #000000 AFK Pocket Lock & Screenshots
     // =========================================================================
     private fun showAfk() {
         if (afkView != null) return
@@ -775,8 +905,7 @@ class OverlayService : Service() {
         scope.launch {
             prevBrightnessMode = Sh.run("settings get system screen_brightness_mode")
             prevBrightness = Sh.run("settings get system screen_brightness")
-            Sh.run("settings put system screen_brightness_mode 0")
-            Sh.run("settings put system screen_brightness 1")
+            Sh.run("settings put system screen_brightness_mode 0\nsettings put system screen_brightness 1")
         }
     }
 
@@ -795,18 +924,20 @@ class OverlayService : Service() {
     }
 
     private fun takeScreenshot() {
-        panelView?.visibility = View.INVISIBLE
+        dockExpandedView?.visibility = View.INVISIBLE
+        dockHandleView?.visibility = View.INVISIBLE
         hudView?.visibility = View.INVISIBLE
         scope.launch {
-            delay(300)
+            delay(250)
             val file = "/sdcard/Pictures/HGB_${System.currentTimeMillis()}.png"
             val out = Sh.run("screencap -p '$file'")
             ui.post {
-                panelView?.visibility = View.VISIBLE
+                dockExpandedView?.visibility = View.VISIBLE
+                dockHandleView?.visibility = View.VISIBLE
                 hudView?.visibility = View.VISIBLE
                 Toast.makeText(
                     this@OverlayService,
-                    if (out.isBlank()) "Screenshot: $file" else "Screenshot: $out",
+                    if (out.isBlank()) "📸 Saved: $file" else "Screenshot: $out",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -815,7 +946,7 @@ class OverlayService : Service() {
 
     private fun removeAll() {
         hideAfk()
-        removeTools()
+        removeCyberDock()
         removeHud()
         CrosshairSettings.style = 0
         updateCrosshair()
@@ -825,6 +956,8 @@ class OverlayService : Service() {
         updateFireRing()
         showRfMacro = false
         updateRfMacroButton()
+        CrosshairSettings.showTriggerPins = false
+        updateTriggerPins()
         AudioTest.stopSonicRadar()
     }
 
@@ -841,6 +974,6 @@ class OverlayService : Service() {
         const val EXTRA_CROSSHAIR = "crosshair"
         const val EXTRA_AUX_LINE = "aux_line"
         const val EXTRA_FIRE_RING = "fire_ring"
-        private const val CHANNEL = "overlay_service_v3"
+        private const val CHANNEL = "overlay_service_v6"
     }
 }

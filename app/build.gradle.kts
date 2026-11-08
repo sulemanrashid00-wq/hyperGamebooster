@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "5.0-Stable"
+        versionCode = 6
+        versionName = "6.0-EsportsMaster"
     }
 
     buildTypes {

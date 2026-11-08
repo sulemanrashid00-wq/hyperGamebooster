@@ -11,10 +11,10 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * AudioTest & RedMagic Sonic Radar Engine (v3.0 Ultimate)
- * - 5-Band Tactical Footstep Equalizer & LoudnessEnhancer (+600mB)
- * - 44.1kHz Stereo PCM sine wave tester (520Hz Left / 780Hz Right)
+ * AudioTest & Tactical Audio Hunter Engine (v6.0 Esports Master)
+ * - 4 Esports Presets: Footstep Hunter, Gunshot Suppressor, Vehicle Rumble Cut, Pro Flat
  * - RedMagic "Sonic Radar" Visualizer(0) capturing 1kHz–4kHz footstep/gunshot frequencies
+ * - 44.1kHz Stereo PCM sine wave tester (520Hz Left / 780Hz Right)
  */
 object AudioTest {
     private var eq: Equalizer? = null
@@ -23,49 +23,75 @@ object AudioTest {
 
     @Volatile var currentThreatLevel: Int = 0 // 0 to 100
     @Volatile var isSonicRadarActive: Boolean = false
+    @Volatile var activePreset: Int = 0 // 0: Off, 1: Footstep, 2: Gunshot, 3: Vehicle, 4: Pro Flat
 
-    /**
-     * Dirac / Spatial Footstep Audio 5-Band Equalizer:
-     * - Cuts bass < 180Hz to prevent grenade concussion masking footsteps
-     * - Boosts 1000Hz - 4500Hz footsteps & reload clicks by +50%
-     * - LoudnessEnhancer +600mB gain boost
-     */
-    fun footstepEq(on: Boolean): String {
+    fun applyPreset(preset: Int): String {
+        activePreset = preset
+        if (preset == 0) {
+            eq?.enabled = false
+            eq?.release()
+            eq = null
+            le?.enabled = false
+            le?.release()
+            le = null
+            return "Tactical Audio FX DISABLED (Stock sound profile)"
+        }
+
         return try {
-            if (on) {
-                val e = eq ?: Equalizer(0, 0).also { eq = it }
-                val lo = e.bandLevelRange[0]
-                val hi = e.bandLevelRange[1]
-                for (b in 0 until e.numberOfBands) {
-                    val hz = e.getCenterFreq(b.toShort()) / 1000
-                    e.setBandLevel(
-                        b.toShort(),
-                        when {
-                            hz < 180 -> (lo / 2).toShort()
-                            hz in 900..4500 -> (hi / 2).toShort()
-                            else -> 0
-                        }
-                    )
+            val e = eq ?: Equalizer(0, 0).also { eq = it }
+            val lo = e.bandLevelRange[0]
+            val hi = e.bandLevelRange[1]
+            val l = le ?: LoudnessEnhancer(0).also { le = it }
+
+            for (b in 0 until e.numberOfBands) {
+                val hz = e.getCenterFreq(b.toShort()) / 1000
+                val level = when (preset) {
+                    1 -> when { // Footstep Hunter
+                        hz < 180 -> (lo * 0.7f).toInt().toShort()
+                        hz in 900..4500 -> (hi * 0.8f).toInt().toShort()
+                        else -> 0
+                    }
+                    2 -> when { // Gunshot Peak Suppressor
+                        hz > 4000 -> (lo * 0.5f).toInt().toShort()
+                        hz in 800..3000 -> (hi * 0.4f).toInt().toShort()
+                        else -> 0
+                    }
+                    3 -> when { // Vehicle Rumble Cut
+                        hz < 250 -> (lo * 0.9f).toInt().toShort()
+                        hz in 1000..4000 -> (hi * 0.5f).toInt().toShort()
+                        else -> 0
+                    }
+                    4 -> 0.toShort() // Pro Flat
+                    else -> 0.toShort()
                 }
-                e.enabled = true
+                e.setBandLevel(b.toShort(), level)
+            }
+            e.enabled = true
 
-                val l = le ?: LoudnessEnhancer(0).also { le = it }
-                l.setTargetGain(600)
-                l.enabled = true
+            val gain = when (preset) {
+                1 -> 600
+                2 -> 400
+                3 -> 500
+                4 -> 500
+                else -> 0
+            }
+            l.setTargetGain(gain)
+            l.enabled = true
 
-                "Tactical Footstep EQ ACTIVE: 1kHz-4.5kHz +6dB Boost, <180Hz Bass Cut, Loudness +600mB"
-            } else {
-                eq?.enabled = false
-                eq?.release()
-                eq = null
-                le?.enabled = false
-                le?.release()
-                le = null
-                "Tactical Footstep EQ DISABLED (Audio profile restored)"
+            when (preset) {
+                1 -> "🎧 Footstep Hunter ACTIVE: +6dB Footsteps (1-4.5kHz), Bass Sub-Cut, Gain +600mB"
+                2 -> "🎧 Gunshot Suppressor ACTIVE: High-Peak Dampened, Mid-Range Boosted"
+                3 -> "🎧 Vehicle Rumble Cut ACTIVE: Engine Frequencies Muted, Nearby Steps Clear"
+                else -> "🎧 Pro Flat Competitive ACTIVE: Clean Acoustics with +500mB Loudness"
             }
         } catch (e: Throwable) {
             "Audio FX error: ${e.message}"
         }
+    }
+
+    /** Legacy helper for backward compatibility */
+    fun footstepEq(on: Boolean): String {
+        return applyPreset(if (on) 1 else 0)
     }
 
     /**
@@ -85,8 +111,6 @@ object AudioTest {
 
                         override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
                             if (fft == null || fft.size < 4) return
-                            // fft format: [real0, imag0, real1, imag1, ...]
-                            // Calculate energy around 1kHz to 4kHz (footstep and gunshot frequencies)
                             val n = fft.size / 2
                             val binHz = (samplingRate.toDouble() / 1000.0) / (2.0 * n)
                             var totalMag = 0.0
@@ -103,8 +127,7 @@ object AudioTest {
                             }
 
                             val avgMag = if (countedBins > 0) totalMag / countedBins else 0.0
-                            // Normalize 0-100 scale
-                            val threat = (avgMag * 2.2).toInt().coerceIn(0, 100)
+                            val threat = (avgMag * 3.5).toInt().coerceIn(0, 100)
                             currentThreatLevel = threat
                         }
                     },
@@ -112,82 +135,69 @@ object AudioTest {
                     false,
                     true
                 )
-                setCaptureSize(captureSize)
+                this.captureSize = captureSize
                 enabled = true
             }
             visualizer = vis
             isSonicRadarActive = true
-            "Sonic Radar Visualizer ACTIVE (1kHz–4.5kHz Live Compass)"
+            "Sonic Radar ACTIVE (Listening on AudioSession 0)"
         } catch (e: Throwable) {
-            isSonicRadarActive = false
-            "Sonic Radar unavailable: ${e.message}"
+            "Sonic Radar error: ${e.message}"
         }
     }
 
     @Synchronized
     fun stopSonicRadar(): String {
-        return try {
-            visualizer?.enabled = false
-            visualizer?.release()
-            visualizer = null
-            isSonicRadarActive = false
-            currentThreatLevel = 0
-            "Sonic Radar STOPPED"
-        } catch (e: Throwable) {
-            "Sonic Radar stop error: ${e.message}"
-        }
+        visualizer?.enabled = false
+        visualizer?.release()
+        visualizer = null
+        isSonicRadarActive = false
+        currentThreatLevel = 0
+        return "Sonic Radar STOPPED"
     }
 
     /**
-     * Generates PCM 44.1kHz sine wave tones:
-     * side: 0 = 520Hz Left earphone only
-     * side: 1 = 780Hz Right earphone only
-     * side: 2 = Both channels
+     * Stereo Left/Right Audio Channel Diagnostic:
+     * Plays 520Hz pure tone on Left Channel (0), 780Hz on Right Channel (1).
      */
-    fun play(side: Int) {
-        Thread {
-            try {
-                val sampleRate = 44100
-                val freq = if (side == 0) 520.0 else 780.0
-                val durationSec = 1.0
-                val numSamples = (durationSec * sampleRate).toInt()
-                val buffer = ShortArray(numSamples * 2)
+    fun play(channel: Int) {
+        val sampleRate = 44100
+        val durationMs = 350
+        val numSamples = (durationMs * sampleRate) / 1000
+        val freq = if (channel == 0) 520.0 else 780.0
+        val buffer = ShortArray(numSamples * 2)
 
-                for (i in 0 until numSamples) {
-                    val sample = (sin(2.0 * PI * freq * i / sampleRate) * 0.5 * Short.MAX_VALUE).toInt().toShort()
-                    when (side) {
-                        0 -> buffer[2 * i] = sample           // Left channel
-                        1 -> buffer[2 * i + 1] = sample       // Right channel
-                        else -> {
-                            buffer[2 * i] = sample
-                            buffer[2 * i + 1] = sample
-                        }
-                    }
-                }
+        for (i in 0 until numSamples) {
+            val angle = 2.0 * PI * i / (sampleRate / freq)
+            val sample = (sin(angle) * Short.MAX_VALUE * 0.75).toInt().toShort()
+            if (channel == 0) {
+                buffer[2 * i] = sample
+                buffer[2 * i + 1] = 0
+            } else {
+                buffer[2 * i] = 0
+                buffer[2 * i + 1] = sample
+            }
+        }
 
-                val track = AudioTrack.Builder()
-                    .setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_GAME)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
-                    .setAudioFormat(
-                        AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(sampleRate)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                            .build()
-                    )
-                    .setBufferSizeInBytes(buffer.size * 2)
-                    .setTransferMode(AudioTrack.MODE_STATIC)
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+                    .build()
+            )
+            .setBufferSizeInBytes(buffer.size * 2)
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .build()
 
-                track.write(buffer, 0, buffer.size)
-                track.play()
-                Thread.sleep(1100)
-                track.release()
-            } catch (_: Throwable) { }
-        }.start()
+        track.write(buffer, 0, buffer.size)
+        track.play()
     }
 }
