@@ -1263,6 +1263,29 @@ class OverlayService : Service() {
             }
         }
         toggleRow.addView(bypassBtn)
+
+        val clrBtn = Button(this).apply {
+            text = "🧹 CLR"
+            textSize = 9f
+            setTextColor(Color.parseColor("#FFD600"))
+            setBackgroundColor(Color.argb(220, 36, 28, 16))
+            setPadding(6, 2, 6, 2)
+            minHeight = 0
+            minimumHeight = 0
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(2, 0, 2, 0)
+            }
+            setOnClickListener {
+                triggerHaptic(30)
+                scope.launch {
+                    Actions.clearPowerKeeperJoyoseWebViewData()
+                    ui.post {
+                        Toast.makeText(this@OverlayService, "🧹 PowerKeeper, Joyose & WebView Cleared!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        toggleRow.addView(clrBtn)
         card.addView(toggleRow)
 
         val lp = WindowManager.LayoutParams(

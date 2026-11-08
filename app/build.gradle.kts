@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "6.0-ApexEsports"
+        versionCode = 7
+        versionName = "6.1-RedmiGodzilla"
     }
 
     buildTypes {

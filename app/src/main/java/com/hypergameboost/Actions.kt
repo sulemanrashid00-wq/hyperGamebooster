@@ -456,34 +456,52 @@ EOF
     suspend fun applyImpulseTouchAndTouchIc(enable: Boolean): String = withContext(Dispatchers.IO) {
         if (enable) {
             val script = """
+                settings put system pointer_speed 7
+                settings put system touch_sensitivity 5
+                settings put system touch_boost 1
+                settings put system touch_sampling_rate 1
+                settings put system touch_response_boost 1
+                settings put system miui_touch_sampling_rate_boost 1
+                settings put system tp_game_mode 1
+                settings put system touch_game_mode_enable 1
+                settings put system gamemode_touch_optimization 1
                 settings put system gamemode_touch_follow_response 100
                 settings put system gamemode_touch_continuous_response 100
-                settings put system gamemode_touch_aim_response 90
+                settings put system gamemode_touch_aim_sensitivity 100
+                settings put system gamemode_touch_aim_response 95
                 settings put system gamemode_touch_tap_stability 100
                 settings put system gamemode_edge_filter 0
-                settings put secure long_press_timeout 100
+                settings put system touch_slop 1
+                settings put secure tap_timeout 60
+                settings put secure long_press_timeout 200
                 settings put secure multi_press_timeout 100
-                settings put system touch_game_mode 1
+                settings put secure touch_blocking_period 0.0
+                cmd device_config put input_native_boot resample_touch false 2>/dev/null
+                cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null
+                setprop windowsmgr.max_events_per_sec 240
                 setprop persist.vendor.touch.sampling_rate 480
                 setprop persist.sys.touch.report_rate 480
                 setprop debug.touch.frequency 480
                 cmd input set-pointer-acceleration 0 2>/dev/null
-                settings put system pointer_speed 7
             """.trimIndent()
             Shell.run(script)
-            "⚡ 0.1ms Raw Impulse Touch & Touch IC 480Hz ACTIVE"
+            "⚡ Redmi Godzilla Touch Overdrive: Pointer 7, Sens 5, 480Hz & Impulse ACTIVE"
         } else {
             val script = """
+                settings put system pointer_speed 0
+                settings put system touch_sensitivity 0
                 settings put system gamemode_touch_follow_response 50
                 settings put system gamemode_touch_continuous_response 50
-                settings put system touch_game_mode 0
+                settings put system touch_game_mode_enable 0
                 settings put secure long_press_timeout 300
-                settings put system pointer_speed 0
+                settings put secure tap_timeout 100
             """.trimIndent()
             Shell.run(script)
             "Touch Response Restored to Default"
         }
     }
+
+    suspend fun applyRedmiTouchOverdrive(): String = applyImpulseTouchAndTouchIc(true)
 
     suspend fun setMagnifier(enable: Boolean, scale: Float = 2.5f): String = withContext(Dispatchers.IO) {
         isMagnifierOn = enable
@@ -523,17 +541,30 @@ EOF
         else "🔌 Standard Charging RESTORED"
     }
 
-    suspend fun restrictPowerKeeperAndJoyose(): String = withContext(Dispatchers.IO) {
+    suspend fun clearPowerKeeperJoyoseWebViewData(): String = withContext(Dispatchers.IO) {
         val script = """
-            cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore
-            cmd appops set com.miui.powerkeeper RUN_ANY_IN_BACKGROUND ignore
-            cmd appops set com.miui.daemon RUN_IN_BACKGROUND ignore
-            cmd appops set com.miui.daemon RUN_ANY_IN_BACKGROUND ignore
-            am force-stop com.xiaomi.joyose
-            am force-stop com.miui.daemon
+            pm clear --user 0 com.miui.powerkeeper 2>/dev/null
+            am force-stop com.miui.powerkeeper 2>/dev/null
+            cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore 2>/dev/null
+            cmd appops set com.miui.powerkeeper RUN_ANY_IN_BACKGROUND ignore 2>/dev/null
+
+            pm clear --user 0 com.xiaomi.joyose 2>/dev/null
+            am force-stop com.xiaomi.joyose 2>/dev/null
+            cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null
+            cmd appops set com.xiaomi.joyose RUN_ANY_IN_BACKGROUND ignore 2>/dev/null
+            cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null
+
+            pm clear --user 0 com.google.android.webview 2>/dev/null
+            pm clear --user 0 com.android.webview 2>/dev/null
+            am force-stop com.google.android.webview 2>/dev/null
+            am force-stop com.android.webview 2>/dev/null
         """.trimIndent()
         Shell.run(script)
-        "PowerKeeper & Joyose Restrained"
+        "🧹 PowerKeeper, Joyose & WebView Data Cleared & Background Restricted!"
+    }
+
+    suspend fun restrictPowerKeeperAndJoyose(): String = withContext(Dispatchers.IO) {
+        clearPowerKeeperJoyoseWebViewData()
     }
 
     suspend fun pinGameProcess(game: String): String = withContext(Dispatchers.IO) {
@@ -571,12 +602,13 @@ EOF
         val g = safeGame(game)
         pinGameProcess(g)
         val script = """
-            am force-stop com.xiaomi.joyose
-            cmd thermalservice override-status 0
+            am force-stop com.xiaomi.joyose 2>/dev/null
+            am force-stop com.miui.powerkeeper 2>/dev/null
+            cmd thermalservice override-status 0 2>/dev/null
         """.trimIndent()
         Shell.run(script)
         lockHardware120HzDisplayMode()
-        "Watchdog 60s: Joyose killed, thermal 0 re-enforced, 120Hz display locked"
+        "Watchdog 60s: Joyose & PowerKeeper halted, thermal 0 re-enforced, 120Hz display locked"
     }
 
     // =========================================================================
@@ -988,19 +1020,31 @@ EOF
             appendLine("  setprop persist.sys.thermal.config 0")
             appendLine(") &")
 
-            // Group 3: Joyose Cloud Nullifier & Restrain PowerKeeper
+            // Group 3: Joyose, PowerKeeper & WebView Safe Data Clear + AppOps Restraint
             appendLine("(")
-            appendLine("  JOYOSE_UID=\$(pm list packages -U com.xiaomi.joyose 2>/dev/null | grep -o 'uid:[0-9]*' | cut -d: -f2 | head -n 1)")
-            appendLine("  if [ ! -z \"\$JOYOSE_UID\" ]; then cmd netpolicy add restrict-background-blacklist \$JOYOSE_UID 2>/dev/null; fi")
-            appendLine("  cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null")
+            appendLine("  pm clear --user 0 com.miui.powerkeeper 2>/dev/null")
+            appendLine("  am force-stop com.miui.powerkeeper 2>/dev/null")
             appendLine("  cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore 2>/dev/null")
-            appendLine("  cmd appops set com.miui.daemon RUN_IN_BACKGROUND ignore 2>/dev/null")
+            appendLine("  cmd appops set com.miui.powerkeeper RUN_ANY_IN_BACKGROUND ignore 2>/dev/null")
+            appendLine("  pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
             appendLine("  am force-stop com.xiaomi.joyose 2>/dev/null")
+            appendLine("  cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null")
+            appendLine("  cmd appops set com.xiaomi.joyose RUN_ANY_IN_BACKGROUND ignore 2>/dev/null")
+            appendLine("  cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null")
+            appendLine("  pm clear --user 0 com.google.android.webview 2>/dev/null")
+            appendLine("  pm clear --user 0 com.android.webview 2>/dev/null")
+            appendLine("  am force-stop com.google.android.webview 2>/dev/null")
+            appendLine("  am force-stop com.android.webview 2>/dev/null")
             appendLine("  am force-stop com.miui.daemon 2>/dev/null")
             appendLine(") &")
 
             // Group 4: Qualcomm Adreno GPU & SurfaceFlinger Zero-Jank
             appendLine("(")
+            appendLine("  service call SurfaceFlinger 1008 i32 1 2>/dev/null")
+            appendLine("  service call SurfaceFlinger 1035 i32 0 2>/dev/null")
+            appendLine("  cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null")
+            appendLine("  setprop debug.sf.latch_unsignaled 1")
+            appendLine("  setprop debug.sf.disable_backpressure 1")
             appendLine("  setprop debug.sf.DropMissedFrames 1")
             appendLine("  setprop debug.sf.disable_HWC 0")
             appendLine("  setprop debug.hwui.skia_atrace_enabled false")
@@ -1011,22 +1055,38 @@ EOF
             appendLine("  setprop debug.renderengine.backend skiaglthreaded")
             appendLine("  setprop vendor.gpu.control.level 3")
             appendLine("  setprop debug.egl.swapinterval 0")
-            appendLine("  setprop debug.sf.latch_unsignaled 1")
             appendLine("  settings put global updatable_driver_all_apps 3")
             appendLine("  settings put global game_driver_opt_in_apps $g")
             appendLine(") &")
 
-            // Group 5: 0.1ms Raw Impulse Touch & Touch IC 480Hz
+            // Group 5: Redmi Touch Sampling Rate 480Hz & Sensitivity Overdrive
             appendLine("(")
+            appendLine("  settings put system pointer_speed 7")
+            appendLine("  settings put system touch_sensitivity 5")
+            appendLine("  settings put system touch_boost 1")
+            appendLine("  settings put system touch_sampling_rate 1")
+            appendLine("  settings put system touch_response_boost 1")
+            appendLine("  settings put system miui_touch_sampling_rate_boost 1")
+            appendLine("  settings put system tp_game_mode 1")
+            appendLine("  settings put system touch_game_mode_enable 1")
+            appendLine("  settings put system gamemode_touch_optimization 1")
             appendLine("  settings put system gamemode_touch_follow_response 100")
             appendLine("  settings put system gamemode_touch_continuous_response 100")
-            appendLine("  settings put system gamemode_touch_aim_response 90")
+            appendLine("  settings put system gamemode_touch_aim_sensitivity 100")
+            appendLine("  settings put system gamemode_touch_aim_response 95")
             appendLine("  settings put system gamemode_touch_tap_stability 100")
             appendLine("  settings put system gamemode_edge_filter 0")
+            appendLine("  settings put system touch_slop 1")
+            appendLine("  settings put secure tap_timeout 60")
+            appendLine("  settings put secure long_press_timeout 200")
+            appendLine("  settings put secure multi_press_timeout 100")
+            appendLine("  settings put secure touch_blocking_period 0.0")
+            appendLine("  cmd device_config put input_native_boot resample_touch false 2>/dev/null")
+            appendLine("  cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null")
+            appendLine("  setprop windowsmgr.max_events_per_sec 240")
             appendLine("  setprop persist.vendor.touch.sampling_rate 480")
             appendLine("  setprop persist.sys.touch.report_rate 480")
             appendLine("  cmd input set-pointer-acceleration 0 2>/dev/null")
-            appendLine("  settings put system pointer_speed 7")
             appendLine(") &")
 
             // Group 6: Bullet Registration & Zero-Desync (2-Buffer + VRS Killer + SkiaGL)
@@ -1043,12 +1103,17 @@ EOF
             appendLine("  setprop debug.hwui.renderer skiagl")
             appendLine(") &")
 
-            // Group 7: Low-Ping Network & Wi-Fi
+            // Group 7: Low-Ping Network & Wi-Fi Bullet Connectivity Stack
             appendLine("(")
+            appendLine("  cmd netd resolver flushdefaultif 2>/dev/null")
             appendLine("  cmd wifi set-wifi-enabled enabled 2>/dev/null")
+            appendLine("  settings put global wifi_scan_always_enabled 0")
+            appendLine("  settings put global wifi_suspend_optimizations_enabled 0")
             appendLine("  settings put global wifi_power_save 0")
             appendLine("  settings put global mobile_data_always_on 1")
             appendLine("  settings put global network_latency_opt 1")
+            appendLine("  settings put system cloud_lowlatency_whitelist $g")
+            appendLine("  settings put system cloud_network_priority_whitelist $g")
             appendLine(") &")
 
             // Group 8: Game Mode 120 FPS
@@ -1219,17 +1284,39 @@ EOF
         val g = safeGame(game)
         val script = """
             cmd netd resolver flushdefaultif 2>/dev/null
+            service call SurfaceFlinger 1008 i32 1 2>/dev/null
+            service call SurfaceFlinger 1035 i32 0 2>/dev/null
+            cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null
+            setprop debug.sf.latch_unsignaled 1
+            setprop debug.sf.disable_backpressure 1
+            setprop debug.sf.DropMissedFrames 1
+            setprop debug.cpuprio 7
+            setprop debug.gpuprio 7
+            setprop debug.ioprio 7
+            settings put global wifi_scan_always_enabled 0 2>/dev/null
+            settings put global wifi_suspend_optimizations_enabled 0 2>/dev/null
+            settings put global network_latency_opt 1 2>/dev/null
+            settings put system cloud_lowlatency_whitelist "$g" 2>/dev/null
+            settings put system cloud_network_priority_whitelist "$g" 2>/dev/null
+            pm clear --user 0 com.miui.powerkeeper 2>/dev/null
+            am force-stop com.miui.powerkeeper 2>/dev/null
+            pm clear --user 0 com.xiaomi.joyose 2>/dev/null
+            am force-stop com.xiaomi.joyose 2>/dev/null
+            pm clear --user 0 com.google.android.webview 2>/dev/null
+            pm clear --user 0 com.android.webview 2>/dev/null
+            am force-stop com.google.android.webview 2>/dev/null
+            am force-stop com.android.webview 2>/dev/null
+            cmd thermalservice override-status 0 2>/dev/null
             PUBG_PID=${'$'}(pidof $g 2>/dev/null)
             if [ ! -z "${'$'}PUBG_PID" ]; then
                 taskset -p -a ff ${'$'}PUBG_PID 2>/dev/null
                 ionice -c 2 -n 0 -p ${'$'}PUBG_PID 2>/dev/null
             fi
-            am force-stop com.xiaomi.joyose 2>/dev/null
-            cmd thermalservice override-status 0 2>/dev/null
             rm -rf '/sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Logs'/* 2>/dev/null
         """.trimIndent()
         Shell.run(script)
-        "⚡ LAG & PING FLUSHED!"
+        pinGameProcess(g)
+        "⚡ LAG, PING & THERMAL CACHES FLUSHED!"
     }
 
     suspend fun revertAll(game: String): String = withContext(Dispatchers.IO) {

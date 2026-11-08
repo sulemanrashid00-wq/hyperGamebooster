@@ -102,6 +102,7 @@ class AutoService : Service() {
                 val now = System.currentTimeMillis()
                 if (now - watchdogTimer >= 60_000L) {
                     watchdogTimer = now
+                    Sh.run("am force-stop com.xiaomi.joyose 2>/dev/null; am force-stop com.miui.powerkeeper 2>/dev/null")
                     Actions.watchdogTick(game)
                     NativeTools.reportAdpfWork(8000000L)
                 }

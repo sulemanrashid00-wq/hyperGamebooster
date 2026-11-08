@@ -440,7 +440,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v6.0 APEX",
+                        "v6.1 GODZILLA",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -607,6 +607,23 @@ fun App() {
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text(btnLaunchText, color = Color.White, fontSize = 13.sp)
+                            }
+
+                            Button(
+                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    statusLog = "🧹 Clearing PowerKeeper, Joyose & WebView data..."
+                                    scope.launch {
+                                        val res = Actions.clearPowerKeeperJoyoseWebViewData()
+                                        statusLog = "✅ $res"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2836)),
+                                border = BorderStroke(1.dp, Color(0xFFFFD600)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("🧹 CLEAR POWERKEEPER, JOYOSE & WEBVIEW DATA + FORCE-STOP", color = Color(0xFFFFD600), fontSize = 11.sp)
                             }
                         }
                     }
@@ -1187,10 +1204,10 @@ fun App() {
                         }
                     }
 
-                    SectionCard("Android 16 Raw 1:1 Impulse Touch", "Disables touch filtering delay & sets 0 slop") {
+                    SectionCard("Redmi Godzilla Touch Overdrive (480Hz & Sens 5)", "Battle-tested HyperOS touch response, zero slop & impulse tracking") {
                         ToggleRow(
-                            label = "Impulse Touch & HyperOS Touch IC",
-                            subtitle = "gamemode_touch_follow_response 100, aim 90, stability 100",
+                            label = "Redmi Touch Overdrive & HyperOS Touch IC",
+                            subtitle = "pointer_speed 7, touch_sensitivity 5, touch_slop 1, 480Hz",
                             enabled = isReady,
                             onAction = { exec { Actions.applyImpulseTouchAndTouchIc(true) } },
                             offAction = { exec { Actions.applyImpulseTouchAndTouchIc(false) } }
