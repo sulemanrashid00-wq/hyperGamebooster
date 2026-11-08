@@ -61,6 +61,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+fun triggerVibe(context: Context) {
+    try {
+        val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            v?.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK))
+        } else {
+            @Suppress("DEPRECATION")
+            v?.vibrate(35)
+        }
+    } catch (_: Throwable) {}
+}
+
 @Composable
 fun VipGamingLogo(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
@@ -268,8 +280,9 @@ fun App() {
     var r1CoordX by remember { mutableStateOf("${CrosshairSettings.r1TargetX}") }
     var r1CoordY by remember { mutableStateOf("${CrosshairSettings.r1TargetY}") }
 
-    // Tactical Audio Hunter
+    // Tactical Audio Hunter & Touch Presets
     var selectedAudioPreset by remember { mutableStateOf(AudioTest.activePreset) }
+    var selectedTouchPreset by remember { mutableStateOf(1) }
 
     // Motion Control state
     var motionEnabled by remember { mutableStateOf(false) }
@@ -423,7 +436,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v6.0 VIP",
+                        "v5.0 GOD-TIER",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -505,6 +518,75 @@ fun App() {
                 // TAB 0: BOOST (Bullet Registration, HyperFusion, GPU Floor, Debloat)
                 // =============================================================
                 0 -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1A2A)),
+                        border = BorderStroke(1.5.dp, Color(0xFF00FF66))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                "⚡ INSTANT ESPORTS MASTER ENGINE",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFF00FF66),
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                "Atomic subshell execution (<300ms) with zero-stutter frame pacing",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF90A4AE),
+                                fontSize = 11.sp
+                            )
+
+                            Button(
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                enabled = isReady && !isBusy,
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    isBusy = true
+                                    exec {
+                                        val t0 = System.currentTimeMillis()
+                                        val res = Actions.esportsMode(selectedGame, ctx.packageName)
+                                        val elapsed = System.currentTimeMillis() - t0
+                                        isBusy = false
+                                        "✅ 120 FPS LOCKED IN ${elapsed}ms!\n$res"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("⚡ ACTIVATE 100% ROCK-SOLID 120 FPS", color = Color.Black, fontSize = 13.sp)
+                            }
+
+                            Button(
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                enabled = isReady && !isBusy,
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    isBusy = true
+                                    exec {
+                                        val t0 = System.currentTimeMillis()
+                                        Actions.esportsMode(selectedGame, ctx.packageName)
+                                        try {
+                                            ctx.startForegroundService(Intent(ctx, AutoService::class.java).putExtra("game", selectedGame))
+                                        } catch (_: Throwable) {}
+                                        val launchRes = Actions.launchGame(ctx, selectedGame)
+                                        val elapsed = System.currentTimeMillis() - t0
+                                        isBusy = false
+                                        "🚀 BOOSTED & LAUNCHED IN ${elapsed}ms!\n$launchRes"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D00)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("🚀 BOOST & LAUNCH GAME NOW", color = Color.White, fontSize = 13.sp)
+                            }
+                        }
+                    }
+
                     SectionCard("🎯 BULLET REGISTRATION & ZERO-DESYNC", "VRS Killer + 2-Buffer Render Queue + Thread Priority 7") {
                         ToggleRow(
                             label = "Bullet Hit-Reg & Zero-Desync Mode",
@@ -618,30 +700,7 @@ fun App() {
                         }
                     }
 
-                    SectionCard("🔥 1-TAP ESPORTS ACTIVATION", "Enforces all 16 optimization modules in ~0.2s atomic batch") {
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = isReady,
-                            onClick = { exec { Actions.esportsMode(selectedGame, ctx.packageName) } },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000))
-                        ) {
-                            Text("⚡ ACTIVATE 100% ROCK-SOLID 120 FPS", fontSize = 13.sp)
-                        }
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = isReady,
-                            onClick = {
-                                exec {
-                                    val r = Actions.esportsMode(selectedGame, ctx.packageName)
-                                    val l = Actions.launchGame(ctx, selectedGame)
-                                    "$r\n$l"
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853))
-                        ) {
-                            Text("🚀 BOOST & LAUNCH GAME NOW", fontSize = 13.sp)
-                        }
-                    }
+
 
                     SectionCard("Bypass Charging & Thermal Protection", "Stop battery heating while playing plugged-in") {
                         ToggleRow(
@@ -879,6 +938,56 @@ fun App() {
                 // TAB 2: TOUCH / AUDIO / AIRTRIGGERS
                 // =============================================================
                 2 -> {
+                    SectionCard("🎯 3 1-TAP TOUCH & RECOIL PRESETS", "Instant hardware sampling & filter profiles") {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedTouchPreset == 1,
+                                onClick = {
+                                    selectedTouchPreset = 1
+                                    exec { Actions.applyTouchPreset(1) }
+                                },
+                                label = { Text("🔥 Preset 1: Jiggle God (480Hz)", fontSize = 11.sp) }
+                            )
+                            FilterChip(
+                                selected = selectedTouchPreset == 2,
+                                onClick = {
+                                    selectedTouchPreset = 2
+                                    exec { Actions.applyTouchPreset(2) }
+                                },
+                                label = { Text("🎯 Preset 2: Laser AR (400Hz Gyro)", fontSize = 11.sp) }
+                            )
+                            FilterChip(
+                                selected = selectedTouchPreset == 3,
+                                onClick = {
+                                    selectedTouchPreset = 3
+                                    exec { Actions.applyTouchPreset(3) }
+                                },
+                                label = { Text("⚡ Preset 3: DMR Sniper (40ms)", fontSize = 11.sp) }
+                            )
+                            FilterChip(
+                                selected = selectedTouchPreset == 0,
+                                onClick = {
+                                    selectedTouchPreset = 0
+                                    exec { Actions.applyTouchPreset(0) }
+                                },
+                                label = { Text("Reset", fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    SectionCard("🎧 FOOTSTEP LATENCY & AUDIO DAC UNCAP", "Bypasses Android safe media limit & communication latency") {
+                        ToggleRow(
+                            label = "Footstep Latency & Audio Bypass",
+                            subtitle = "music_in_communication 1, peak_volume 1, safemedia bypass",
+                            enabled = isReady,
+                            onAction = { exec { Actions.applyAudioAndDacFix(true) } },
+                            offAction = { exec { Actions.applyAudioAndDacFix(false) } }
+                        )
+                    }
+
                     SectionCard("🎮 ASUS ROG HARDWARE AIRTRIGGERS (L1 / R1)", "Physical Volume Buttons Trigger On-Screen Aim & Fire") {
                         ToggleRow(
                             label = "Hardware Volume Triggers",

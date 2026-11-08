@@ -5,7 +5,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
-import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 /** 0 = Shizuku not running, 1 = Running but no permission, 2 = Ready */
@@ -34,14 +33,49 @@ object Shell {
         hasRoot?.let { return it }
         val found = try {
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
-            val out = p.inputStream.bufferedReader().use { it.readText() }
-            p.waitFor(1, TimeUnit.SECONDS)
+            val out = safeExecute(p, 1)
             out.contains("uid=0")
         } catch (_: Throwable) {
             false
         }
         hasRoot = found
         return found
+    }
+
+    /**
+     * Executes process with non-blocking async stream reader & strict 4-second timeout.
+     * Prevents any deadlock if Shizuku binder or child command hangs!
+     */
+    private fun safeExecute(p: Process, timeoutSeconds: Long = 4): String {
+        try {
+            p.outputStream.close()
+        } catch (_: Throwable) {}
+
+        var output = ""
+        val readThread = Thread {
+            try {
+                output = p.inputStream.bufferedReader().use { it.readText() }
+            } catch (_: Throwable) {}
+        }
+        readThread.start()
+
+        val exited = try {
+            p.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+        } catch (_: Throwable) {
+            false
+        }
+
+        if (!exited) {
+            try {
+                p.destroyForcibly()
+            } catch (_: Throwable) {}
+        }
+
+        try {
+            readThread.join(250)
+        } catch (_: Throwable) {}
+
+        return output.trim()
     }
 
     /**
@@ -62,9 +96,7 @@ object Shell {
                 m.isAccessible = true
                 val p = m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as? Process
                 if (p != null) {
-                    val out = p.inputStream.bufferedReader().use { it.readText() }
-                    p.waitFor(3, TimeUnit.SECONDS)
-                    return out.trim()
+                    return safeExecute(p, 4)
                 }
             } catch (_: Throwable) {
                 // Fallback to local execution
@@ -75,9 +107,7 @@ object Shell {
         if (isRootAvailable()) {
             try {
                 val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-                val out = p.inputStream.bufferedReader().use { it.readText() }
-                p.waitFor(3, TimeUnit.SECONDS)
-                return out.trim()
+                return safeExecute(p, 4)
             } catch (_: Throwable) {
                 // Fallback to standard sh
             }
@@ -86,16 +116,14 @@ object Shell {
         // 3. Standard Runtime Exec Fallback
         return try {
             val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-            val out = p.inputStream.bufferedReader().use { it.readText() }
-            p.waitFor(2, TimeUnit.SECONDS)
-            out.trim()
+            safeExecute(p, 3)
         } catch (e: Throwable) {
             "ERR: ${e.message}"
         }
     }
 
     /**
-     * Executes a batch of commands combined into a single fast atomic shell process.
+     * Executes a batch of commands combined into a single fast atomic subshell script with 2>/dev/null.
      */
     fun runBatch(cmds: List<String>): String {
         if (cmds.isEmpty()) return ""

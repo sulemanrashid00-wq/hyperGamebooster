@@ -79,6 +79,7 @@ class OverlayService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Overlays
+    private var hudContainerView: View? = null
     private var hudView: TextView? = null
     private var dockHandleView: TextView? = null
     private var dockExpandedView: LinearLayout? = null
@@ -163,24 +164,67 @@ class OverlayService : Service() {
         }
     }
 
+    private fun triggerHaptic(ms: Long = 30) {
+        try {
+            val vib = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vib?.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            } else {
+                @Suppress("DEPRECATION")
+                vib?.vibrate(ms)
+            }
+        } catch (_: Throwable) {}
+    }
+
     // =========================================================================
     // 1. Live Telemetry HUD (Live FPS, 1% Low, Frame-Time, Power Watts, Sonic Radar)
     // =========================================================================
     private fun showHud() {
-        if (hudView != null) return
+        if (hudContainerView != null) return
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.argb(215, 8, 12, 17))
+            setPadding(14, 6, 10, 6)
+        }
+
         val tv = TextView(this).apply {
             setTextColor(Color.parseColor("#00E676"))
             textSize = 10f
-            setBackgroundColor(Color.argb(205, 8, 12, 17))
-            setPadding(16, 8, 16, 8)
+            setPadding(0, 0, 10, 0)
             text = "⚡ ESPORTS TELEMETRY ACTIVE"
         }
+        container.addView(tv)
+
+        val fixBtn = Button(this).apply {
+            text = "⚡FIX"
+            setTextColor(Color.parseColor("#00FF66"))
+            textSize = 9f
+            setBackgroundColor(Color.argb(230, 20, 32, 48))
+            setPadding(8, 0, 8, 0)
+            minHeight = 0
+            minimumHeight = 0
+            setOnClickListener {
+                triggerHaptic(30)
+                text = "⚡..."
+                scope.launch {
+                    val res = Actions.quickLagAndPingFlush(game)
+                    ui.post {
+                        text = "⚡OK!"
+                        Toast.makeText(this@OverlayService, res, Toast.LENGTH_SHORT).show()
+                    }
+                    delay(1000)
+                    ui.post { text = "⚡FIX" }
+                }
+            }
+        }
+        container.addView(fixBtn)
+
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -188,7 +232,8 @@ class OverlayService : Service() {
             x = 24
             y = 24
         }
-        wm.addView(tv, lp)
+        wm.addView(container, lp)
+        hudContainerView = container
         hudView = tv
         hudJob?.cancel()
         hudJob = scope.launch { hudLoop() }
@@ -197,7 +242,8 @@ class OverlayService : Service() {
     private fun removeHud() {
         hudJob?.cancel()
         hudJob = null
-        hudView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        hudContainerView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        hudContainerView = null
         hudView = null
     }
 
@@ -926,7 +972,7 @@ class OverlayService : Service() {
     private fun takeScreenshot() {
         dockExpandedView?.visibility = View.INVISIBLE
         dockHandleView?.visibility = View.INVISIBLE
-        hudView?.visibility = View.INVISIBLE
+        hudContainerView?.visibility = View.INVISIBLE
         scope.launch {
             delay(250)
             val file = "/sdcard/Pictures/HGB_${System.currentTimeMillis()}.png"
@@ -934,7 +980,7 @@ class OverlayService : Service() {
             ui.post {
                 dockExpandedView?.visibility = View.VISIBLE
                 dockHandleView?.visibility = View.VISIBLE
-                hudView?.visibility = View.VISIBLE
+                hudContainerView?.visibility = View.VISIBLE
                 Toast.makeText(
                     this@OverlayService,
                     if (out.isBlank()) "📸 Saved: $file" else "Screenshot: $out",

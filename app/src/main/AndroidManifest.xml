@@ -24,6 +24,9 @@
         <package android:name="com.rekoo.pubgm" />
         <package android:name="com.tencent.tmgp.pubgmhd" />
         <package android:name="com.tencent.iglite" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
     </queries>
 
     <application
