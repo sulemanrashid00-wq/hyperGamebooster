@@ -178,6 +178,10 @@ fun App() {
     var isBusy by remember { mutableStateOf(false) }
     var activeTab by remember { mutableStateOf(0) }
 
+    // Bullet Reg & Renderer state
+    var bulletRegActive by remember { mutableStateOf(true) }
+    var rendererMode by remember { mutableStateOf("skiagl") }
+
     // PGT+ v0.25.9 State
     var pgtRes by remember { mutableStateOf("1280x720") }
     var pgtQual by remember { mutableStateOf("Smooth") }
@@ -189,6 +193,9 @@ fun App() {
     var pgtSoundQual by remember { mutableStateOf("Ultra") }
     var pgtGpuExt by remember { mutableStateOf("Apply All") }
     var pgtSaveSens by remember { mutableStateOf(true) }
+
+    // Wide FOV state
+    var maintainYFov by remember { mutableStateOf(false) }
 
     // Magnifier state
     var zoomScale by remember { mutableStateOf(2.5f) }
@@ -228,6 +235,9 @@ fun App() {
         pgtQual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
         pgtPotatoLevel = sp.getString("potato_$game", "Off") ?: "Off"
         zoomScale = sp.getFloat("zoom_$game", 2.5f)
+        bulletRegActive = sp.getBoolean("bullet_reg_$game", true)
+        rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
+        maintainYFov = sp.getBoolean("wide_fov_$game", false)
         CrosshairSettings.magnifierScale = zoomScale
     }
 
@@ -238,6 +248,9 @@ fun App() {
             .putString("qual_$game", pgtQual)
             .putString("potato_$game", pgtPotatoLevel)
             .putFloat("zoom_$game", zoomScale)
+            .putBoolean("bullet_reg_$game", bulletRegActive)
+            .putString("renderer_$game", rendererMode)
+            .putBoolean("wide_fov_$game", maintainYFov)
             .apply()
     }
 
@@ -322,7 +335,7 @@ fun App() {
                     color = Color(0xFF00E676)
                 )
                 Text(
-                    "v3.0 ULTIMATE",
+                    "v4.0 GOD-TIER",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF00E5FF)
                 )
@@ -401,9 +414,62 @@ fun App() {
         ) {
             when (activeTab) {
                 // =============================================================
-                // TAB 1: BOOST (Esports 1-Tap, Watchdog, Bypass Charging)
+                // TAB 1: BOOST (Bullet Registration, Debloat, Watchdog, Bypass)
                 // =============================================================
                 0 -> {
+                    SectionCard("🎯 BULLET REGISTRATION & ZERO-DESYNC", "VRS Killer + 2-Buffer Render Queue + Thread Priority 7") {
+                        ToggleRow(
+                            label = "Bullet Hit-Reg & Zero-Desync Mode",
+                            subtitle = "Kills VRS blur, sets 2-frame buffer & Thread Prio 7",
+                            enabled = isReady,
+                            onAction = {
+                                bulletRegActive = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyBulletRegistrationMode(selectedGame, true, rendererMode) }
+                            },
+                            offAction = {
+                                bulletRegActive = false
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyBulletRegistrationMode(selectedGame, false) }
+                            }
+                        )
+                        Text("Renderer & Driver Switcher:", color = Color.White, fontSize = 12.sp)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(
+                                selected = rendererMode == "skiagl",
+                                onClick = {
+                                    rendererMode = "skiagl"
+                                    saveProfileForGame(selectedGame)
+                                    if (bulletRegActive) exec { Actions.applyBulletRegistrationMode(selectedGame, true, "skiagl") }
+                                },
+                                label = { Text("[A] SkiaGL + System Driver (Best Hit-Reg)", fontSize = 11.sp) }
+                            )
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(
+                                selected = rendererMode == "skiavk",
+                                onClick = {
+                                    rendererMode = "skiavk"
+                                    saveProfileForGame(selectedGame)
+                                    if (bulletRegActive) exec { Actions.applyBulletRegistrationMode(selectedGame, true, "skiavk") }
+                                },
+                                label = { Text("[B] SkiaVK + Game Driver (Max FPS)", fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    SectionCard("🛡️ Safe Phone De-Bloat & RAM Guard", "Force-stop background apps without touching WhatsApp/Gboard") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = isReady && !isBusy,
+                            onClick = { exec { Actions.safeDeepPhoneDebloat(ctx) } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EA))
+                        ) {
+                            Text("1-TAP DEEP PHONE DE-BLOAT & RAM GUARD", fontSize = 12.sp)
+                        }
+                        Text("Stops third-party and Xiaomi bloatware. Whitelist protects WhatsApp, Gboard, Shizuku, and PUBG.", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                    }
+
                     SectionCard("🔥 ESPORTS 1-TAP ACTIVATION", "Enforces all 16 optimization modules in a single batch") {
                         Button(
                             modifier = Modifier.fillMaxWidth(),
@@ -442,7 +508,7 @@ fun App() {
                     SectionCard("Smart Watchdog & Auto-Profile", "PID tracking: auto-boost on launch, auto-revert on close") {
                         ToggleRow(
                             label = "Joyose Smart Watchdog (AutoService)",
-                            subtitle = "Auto-applies saved profile when game opens, 60s Joyose kill loop",
+                            subtitle = "Auto-applies saved profile when game opens, 60s Joyose kill + 120Hz lock",
                             enabled = isReady,
                             onAction = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -483,54 +549,67 @@ fun App() {
                             offAction = { exec { Actions.applyHyperOsCloudGreezerAndMillet(selectedGame, false) } }
                         )
                     }
-
-                    SectionCard("System Cleaning & Maintenance", "Free up CPU threads & storage I/O") {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady && !isBusy,
-                                onClick = { exec { Actions.cleanRam(emptySet(), ctx.packageName) } }
-                            ) {
-                                Text("Clean RAM", fontSize = 11.sp)
-                            }
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady && !isBusy,
-                                onClick = { exec { Actions.trimCaches() } }
-                            ) {
-                                Text("Trim Caches", fontSize = 11.sp)
-                            }
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady && !isBusy,
-                                onClick = { exec { Actions.purgeSystemServerAndTrim() } }
-                            ) {
-                                Text("FSTRIM Purge", fontSize = 11.sp)
-                            }
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady && !isBusy,
-                                onClick = { exec { Actions.pinGameProcess(selectedGame) } }
-                            ) {
-                                Text("Pin CPU Prime (taskset ff)", fontSize = 11.sp)
-                            }
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady && !isBusy,
-                                onClick = { exec { Actions.suspendHeavyApps(true) } }
-                            ) {
-                                Text("Suspend Social Apps", fontSize = 11.sp)
-                            }
-                        }
-                    }
                 }
 
                 // =============================================================
-                // TAB 2: GFX / RES (PGT+ v0.25.9 Complete, Sniper Zoom, Downscale)
+                // TAB 2: GFX / RES (Wide View, Smoke Anti-Lag, PGT+ Complete)
                 // =============================================================
                 1 -> {
+                    SectionCard("⚡ Netcode Tickrate & Smoke Anti-Lag", "Constant 120 FPS in smokes & instant bullet packets") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = isReady && !isBusy,
+                            onClick = { exec { Actions.injectZeroDesyncNetcodeAndSmokeAntiLag(selectedGame) } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B0FF))
+                        ) {
+                            Text("INJECT ZERO-DESYNC NETCODE & SMOKE ANTI-LAG", fontSize = 11.sp)
+                        }
+                        Text("Sets p.NetEnableMoveCombining=0 (every bullet sent instantly) & smoke particle spawn scale 0.25x.", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                    }
+
+                    SectionCard("True Full-Screen Wide View (MaintainYFOV)", "Full-screen camera expansion without black bars") {
+                        ToggleRow(
+                            label = "Camera Wide View (AspectRatio_MaintainYFOV)",
+                            subtitle = "Expands horizontal field of view cleanly on full screen",
+                            enabled = isReady,
+                            onAction = {
+                                maintainYFov = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyMaintainYFov(selectedGame, true) }
+                            },
+                            offAction = {
+                                maintainYFov = false
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyMaintainYFov(selectedGame, false) }
+                            }
+                        )
+                    }
+
+                    SectionCard("Esports Stretched Hitbox & Aspect Downscaler", "Wider character models for easy headshots") {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(4) } }) {
+                                Text("1080x2160 Stretched", fontSize = 10.sp)
+                            }
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(5) } }) {
+                                Text("1080x1920 Ultra Wide", fontSize = 10.sp)
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(1) } }) {
+                                Text("900p Pro", fontSize = 10.sp)
+                            }
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(2) } }) {
+                                Text("810p Scrim", fontSize = 10.sp)
+                            }
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(3) } }) {
+                                Text("720p Potato", fontSize = 10.sp)
+                            }
+                        }
+                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(0) } }) {
+                            Text("Reset Screen Resolution to Stock")
+                        }
+                    }
+
                     SectionCard("PGT+ (v0.25.9) Config & Extension Injector", "Full interactive controls & sensitivity protection") {
                         Text("Resolution:", color = Color.White, fontSize = 12.sp)
                         Row(
@@ -686,26 +765,6 @@ fun App() {
                         }
                     }
 
-                    SectionCard("Aspect-Ratio Hardware Downscaler", "Ban-safe resolution scaling for competitive scrims") {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(1) } }) {
-                                Text("900p Pro", fontSize = 11.sp)
-                            }
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(2) } }) {
-                                Text("810p Scrim", fontSize = 11.sp)
-                            }
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(3) } }) {
-                                Text("720p Potato", fontSize = 11.sp)
-                            }
-                        }
-                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(0) } }) {
-                            Text("Reset Screen Resolution to Stock")
-                        }
-                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = isReady, onClick = { exec { Actions.launchFreeformIpadView(selectedGame) } }) {
-                            Text("Launch Freeform iPad View Mode")
-                        }
-                    }
-
                     SectionCard("Visual Camper Filters", "Spot enemies in grass (Erangel/Sanhok)") {
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -728,23 +787,30 @@ fun App() {
                             }
                         }
                     }
-
-                    SectionCard("UE4 Engine Maintenance", "Clean shader caches & pre-compile ART") {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.cleanUe4StutterLogs(selectedGame) } }) {
-                                Text("Purge UE4 Logs", fontSize = 11.sp)
-                            }
-                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.artSpeedCompile(selectedGame) } }) {
-                                Text("ART Speed Compile", fontSize = 11.sp)
-                            }
-                        }
-                    }
                 }
 
                 // =============================================================
                 // TAB 3: TOUCH / AUDIO (Impulse Touch, Motion Control, DMR Macro)
                 // =============================================================
                 2 -> {
+                    SectionCard("🎯 Bullet Registration & Desync Switch", "VRS Killer + Thread Priority 7") {
+                        ToggleRow(
+                            label = "Bullet Hit-Reg & Zero-Desync Mode",
+                            subtitle = "Kills VRS blur & eliminates render queue delay",
+                            enabled = isReady,
+                            onAction = {
+                                bulletRegActive = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyBulletRegistrationMode(selectedGame, true, rendererMode) }
+                            },
+                            offAction = {
+                                bulletRegActive = false
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyBulletRegistrationMode(selectedGame, false) }
+                            }
+                        )
+                    }
+
                     SectionCard("Android 16 Raw 1:1 Impulse Touch", "Disables touch filtering delay & sets 0 slop") {
                         ToggleRow(
                             label = "Impulse Touch & HyperOS Touch IC",
@@ -874,9 +940,38 @@ fun App() {
                 }
 
                 // =============================================================
-                // TAB 4: HUD / NET (Crosshairs, Floating App, Firewall, DNS)
+                // TAB 4: HUD / NET (Flush DNS, Crosshairs, Floating App, DND)
                 // =============================================================
                 3 -> {
+                    SectionCard("Low-Ping Network Firewall & DNS Optimizer", "Eliminate background jitter & flush DNS") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = isReady && !isBusy,
+                            onClick = { exec { Actions.flushDnsAndResetSocketJitter() } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853))
+                        ) {
+                            Text("🔄 1-TAP FLUSH DNS & RESET SOCKET JITTER", fontSize = 11.sp)
+                        }
+                        ToggleRow(
+                            label = "Network Bandwidth Firewall",
+                            subtitle = "cmd netpolicy whitelist only active PUBG UID",
+                            enabled = isReady,
+                            onAction = { exec { Actions.applyLowPingNetworkFirewall(selectedGame, true) } },
+                            offAction = { exec { Actions.applyLowPingNetworkFirewall(selectedGame, false) } }
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.setGamingDns("cloudflare") } }) {
+                                Text("Cloudflare 1.1.1.1", fontSize = 11.sp)
+                            }
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.setGamingDns("google") } }) {
+                                Text("Google 8.8.8.8", fontSize = 11.sp)
+                            }
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.setGamingDns("auto") } }) {
+                                Text("Auto DNS", fontSize = 11.sp)
+                            }
+                        }
+                    }
+
                     SectionCard("Crosshair X/Y Alignment & Customizer", "Pixel-perfect punch-hole centering") {
                         Text("Style:", color = Color.White, fontSize = 12.sp)
                         Row(
@@ -1015,39 +1110,6 @@ fun App() {
                                     },
                                     label = { Text(name, fontSize = 11.sp) }
                                 )
-                            }
-                        }
-                    }
-
-                    SectionCard("Low-Ping Network Firewall & DNS", "Eliminate background data consumption") {
-                        ToggleRow(
-                            label = "Network Bandwidth Firewall",
-                            subtitle = "cmd netpolicy whitelist only active PUBG UID",
-                            enabled = isReady,
-                            onAction = { exec { Actions.applyLowPingNetworkFirewall(selectedGame, true) } },
-                            offAction = { exec { Actions.applyLowPingNetworkFirewall(selectedGame, false) } }
-                        )
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.setGamingDns("cloudflare") } }
-                            ) {
-                                Text("Cloudflare 1.1.1.1", fontSize = 11.sp)
-                            }
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.setGamingDns("google") } }
-                            ) {
-                                Text("Google 8.8.8.8", fontSize = 11.sp)
-                            }
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.setGamingDns("auto") } }
-                            ) {
-                                Text("Auto DNS", fontSize = 11.sp)
                             }
                         }
                     }

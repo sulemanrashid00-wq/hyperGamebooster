@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "3.0-Ultimate"
+        versionCode = 4
+        versionName = "4.0-GodTier"
     }
 
     buildTypes {

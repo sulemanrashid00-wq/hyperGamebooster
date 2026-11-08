@@ -18,10 +18,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * AutoService - HyperOS 3 Smart Auto-Profile & 60s Watchdog Engine (v3.0 Ultimate)
+ * AutoService - HyperOS 3 Smart Auto-Profile & 60s Watchdog Engine (v4.0 God-Tier)
  * 1. Automatically detects game start via PID transition (`pidof $game`)
  * 2. Instantly loads and applies per-game saved profile (FPS, Downscale, Touch IC, Saturation, Prime Pinning)
- * 3. 60-Second Watchdog Loop: kills Joyose, re-enforces thermal status 0, pins PID via taskset ff
+ * 3. 60-Second Watchdog Loop: kills Joyose, locks 120Hz hardware display mode (defeats 42°C drop), re-enforces thermal 0, pins PID via taskset ff
  * 4. The moment game closes (PID becomes empty), automatically reverts 100% to stock settings
  */
 class AutoService : Service() {
@@ -66,7 +66,7 @@ class AutoService : Service() {
                 if (!wasGameRunning) {
                     wasGameRunning = true
 
-                    // 1. Activate Full Esports Mode
+                    // 1. Activate Full Esports Mode + Bullet Registration
                     Actions.esportsMode(game, packageName)
                     NativeTools.startAdpfSession(this@AutoService, 8333333L)
                     NativeTools.setWifiLowLatency(this@AutoService, true)
@@ -77,15 +77,25 @@ class AutoService : Service() {
                     val fps = sp.getInt("fps_$game", 120)
                     val satMode = sp.getString("sat_$game", "eagle_eye") ?: "eagle_eye"
                     val bypassCharge = sp.getBoolean("bypass_$game", false)
+                    val bulletReg = sp.getBoolean("bullet_reg_$game", true)
+                    val rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
+                    val wideFov = sp.getBoolean("wide_fov_$game", false)
 
                     Actions.applyDownscaleAndFps(game, ds, fps)
                     Actions.applyCamperFilters(satMode)
                     if (bypassCharge) {
                         Actions.setBypassCharging(true)
                     }
+                    if (bulletReg) {
+                        Actions.applyBulletRegistrationMode(game, true, rendererMode)
+                    }
+                    if (wideFov) {
+                        Actions.applyMaintainYFov(game, true)
+                    }
 
-                    // 3. Pin process to Prime CPU cores immediately
+                    // 3. Pin process to Prime CPU cores immediately & lock 120Hz display mode
                     Actions.pinGameProcess(game)
+                    Actions.lockHardware120HzDisplayMode()
                 }
 
                 // 60-Second Watchdog Tick
@@ -114,6 +124,6 @@ class AutoService : Service() {
 
     companion object {
         const val EXTRA_GAME = "game"
-        private const val CHANNEL = "auto_watchdog_v3"
+        private const val CHANNEL = "auto_watchdog_v4"
     }
 }
