@@ -615,29 +615,31 @@ fun App() {
                         var refreshTrigger by remember { mutableStateOf(0) }
                         val tracker = NativeTools.SessionStatsTracker
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Column {
-                                Text("Session Duration", color = Color(0xFF90A4AE), fontSize = 11.sp)
-                                Text(tracker.getDurationFormatted(), color = Color(0xFF00E5FF), fontSize = 13.sp)
+                        key(refreshTrigger) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column {
+                                    Text("Session Duration", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                    Text(tracker.getDurationFormatted(), color = Color(0xFF00E5FF), fontSize = 13.sp)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Average FPS", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                    Text(if (tracker.avgFps > 0) "${"%.1f".format(tracker.avgFps)} FPS" else "-- FPS", color = Color(0xFF00FF66), fontSize = 13.sp)
+                                }
                             }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Average FPS", color = Color(0xFF90A4AE), fontSize = 11.sp)
-                                Text(if (tracker.avgFps > 0) "${"%.1f".format(tracker.avgFps)} FPS" else "-- FPS", color = Color(0xFF00FF66), fontSize = 13.sp)
-                            }
-                        }
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Column {
-                                Text("Lowest 1% Low", color = Color(0xFF90A4AE), fontSize = 11.sp)
-                                Text(if (tracker.minOnePercentLow < 999.0) "${"%.1f".format(tracker.minOnePercentLow)} FPS" else "-- FPS", color = Color(0xFFFFD600), fontSize = 13.sp)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Best Ping", color = Color(0xFF90A4AE), fontSize = 11.sp)
-                                Text(if (tracker.bestPingMs < 999L) "${tracker.bestPingMs}ms" else "--ms", color = Color(0xFF00E5FF), fontSize = 13.sp)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Peak Battery Temp", color = Color(0xFF90A4AE), fontSize = 11.sp)
-                                Text(if (tracker.peakTempC > 0f) "${"%.1f".format(tracker.peakTempC)}°C" else "--°C", color = if (tracker.peakTempC > 42f) Color(0xFFFF5252) else Color(0xFF00FF66), fontSize = 13.sp)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column {
+                                    Text("Lowest 1% Low", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                    Text(if (tracker.minOnePercentLow < 999.0) "${"%.1f".format(tracker.minOnePercentLow)} FPS" else "-- FPS", color = Color(0xFFFFD600), fontSize = 13.sp)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Best Ping", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                    Text(if (tracker.bestPingMs < 999L) "${tracker.bestPingMs}ms" else "--ms", color = Color(0xFF00E5FF), fontSize = 13.sp)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Peak Battery Temp", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                    Text(if (tracker.peakTempC > 0f) "${"%.1f".format(tracker.peakTempC)}°C" else "--°C", color = if (tracker.peakTempC > 42f) Color(0xFFFF5252) else Color(0xFF00FF66), fontSize = 13.sp)
+                                }
                             }
                         }
 

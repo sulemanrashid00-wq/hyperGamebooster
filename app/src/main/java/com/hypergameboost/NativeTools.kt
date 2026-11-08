@@ -37,66 +37,7 @@ data class PingJitterReport(
     val jitterMs: Long
 )
 
-object SessionStatsTracker {
-    private var totalFpsSamples = 0L
-    private var sumFps = 0.0
-    var minOnePercentLow: Double = 999.0
-        private set
-    var avgFps: Double = 0.0
-        private set
-    var bestPingMs: Long = 999L
-        private set
-    var peakTempC: Float = 0f
-        private set
-    var startTimeMs: Long = System.currentTimeMillis()
-        private set
-
-    @Synchronized
-    fun recordFps(liveFps: Double, onePercentLow: Double) {
-        if (liveFps > 10.0) {
-            totalFpsSamples++
-            sumFps += liveFps
-            avgFps = sumFps / totalFpsSamples
-            if (onePercentLow > 10.0 && onePercentLow < minOnePercentLow) {
-                minOnePercentLow = onePercentLow
-            }
-        }
-    }
-
-    @Synchronized
-    fun recordPing(pingMs: Long) {
-        if (pingMs > 0 && pingMs < bestPingMs) {
-            bestPingMs = pingMs
-        }
-    }
-
-    @Synchronized
-    fun recordTemp(tempC: Float) {
-        if (tempC > peakTempC) {
-            peakTempC = tempC
-        }
-    }
-
-    @Synchronized
-    fun reset() {
-        totalFpsSamples = 0L
-        sumFps = 0.0
-        minOnePercentLow = 999.0
-        avgFps = 0.0
-        bestPingMs = 999L
-        peakTempC = 0f
-        startTimeMs = System.currentTimeMillis()
-    }
-
-    fun hasStats(): Boolean = totalFpsSamples > 0 || bestPingMs < 999L
-
-    fun getDurationFormatted(): String {
-        val sec = ((System.currentTimeMillis() - startTimeMs) / 1000L).coerceAtLeast(0)
-        val mins = sec / 60
-        val s = sec % 60
-        return "${mins}m ${s}s"
-    }
-}
+val SessionStatsTracker get() = NativeTools.SessionStatsTracker
 
 /**
  * Native Android API features (Tier-1: No ADB / No Root required) - v3.0 Ultimate
@@ -109,6 +50,66 @@ object SessionStatsTracker {
  * - 400Hz+ Gyroscope Hardware Warmup Pad
  */
 object NativeTools {
+    object SessionStatsTracker {
+        private var totalFpsSamples = 0L
+        private var sumFps = 0.0
+        var minOnePercentLow: Double = 999.0
+            private set
+        var avgFps: Double = 0.0
+            private set
+        var bestPingMs: Long = 999L
+            private set
+        var peakTempC: Float = 0f
+            private set
+        var startTimeMs: Long = System.currentTimeMillis()
+            private set
+
+        @Synchronized
+        fun recordFps(liveFps: Double, onePercentLow: Double) {
+            if (liveFps > 10.0) {
+                totalFpsSamples++
+                sumFps += liveFps
+                avgFps = sumFps / totalFpsSamples
+                if (onePercentLow > 10.0 && onePercentLow < minOnePercentLow) {
+                    minOnePercentLow = onePercentLow
+                }
+            }
+        }
+
+        @Synchronized
+        fun recordPing(pingMs: Long) {
+            if (pingMs > 0 && pingMs < bestPingMs) {
+                bestPingMs = pingMs
+            }
+        }
+
+        @Synchronized
+        fun recordTemp(tempC: Float) {
+            if (tempC > peakTempC) {
+                peakTempC = tempC
+            }
+        }
+
+        @Synchronized
+        fun reset() {
+            totalFpsSamples = 0L
+            sumFps = 0.0
+            minOnePercentLow = 999.0
+            avgFps = 0.0
+            bestPingMs = 999L
+            peakTempC = 0f
+            startTimeMs = System.currentTimeMillis()
+        }
+
+        fun hasStats(): Boolean = totalFpsSamples > 0 || bestPingMs < 999L
+
+        fun getDurationFormatted(): String {
+            val sec = ((System.currentTimeMillis() - startTimeMs) / 1000L).coerceAtLeast(0)
+            val mins = sec / 60
+            val s = sec % 60
+            return "${mins}m ${s}s"
+        }
+    }
     @Volatile private var wifiLock: WifiManager.WifiLock? = null
     @Volatile private var adpfSession: Any? = null
     @Volatile private var gyroListener: SensorEventListener? = null
