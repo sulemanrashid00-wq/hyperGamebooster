@@ -250,8 +250,8 @@ fun App() {
     var activeTab by remember { mutableStateOf(0) }
     var btnBoostText by remember { mutableStateOf("⚡ ACTIVATE 100% ROCK-SOLID 120 FPS") }
     var btnLaunchText by remember { mutableStateOf("🚀 BOOST & LAUNCH GAME NOW") }
-    var lastBoostClick by remember { mutableLongStateOf(0L) }
-    var lastLaunchClick by remember { mutableLongStateOf(0L) }
+    var lastBoostClick by remember { mutableStateOf(0L) }
+    var lastLaunchClick by remember { mutableStateOf(0L) }
 
     // State Variables
     var bulletRegActive by remember { mutableStateOf(true) }

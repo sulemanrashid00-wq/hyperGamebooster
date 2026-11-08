@@ -3,7 +3,9 @@ package com.hypergameboost
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 object Games {
