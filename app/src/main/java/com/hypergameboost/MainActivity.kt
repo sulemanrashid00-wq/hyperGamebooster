@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -27,6 +28,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -55,6 +58,51 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun VipGamingLogo(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // Outer Hex Shield
+        val shieldPath = Path().apply {
+            moveTo(w * 0.5f, h * 0.05f)
+            lineTo(w * 0.95f, h * 0.25f)
+            lineTo(w * 0.95f, h * 0.70f)
+            lineTo(w * 0.5f, h * 0.95f)
+            lineTo(w * 0.05f, h * 0.70f)
+            lineTo(w * 0.05f, h * 0.25f)
+            close()
+        }
+        drawPath(path = shieldPath, color = Color(0xFF101928))
+        drawPath(path = shieldPath, color = Color(0xFF00E5FF), style = Stroke(width = 3f))
+
+        // Inner Cyber Neon Border
+        val innerPath = Path().apply {
+            moveTo(w * 0.5f, h * 0.15f)
+            lineTo(w * 0.85f, h * 0.30f)
+            lineTo(w * 0.85f, h * 0.65f)
+            lineTo(w * 0.5f, h * 0.85f)
+            lineTo(w * 0.15f, h * 0.65f)
+            lineTo(w * 0.15f, h * 0.30f)
+            close()
+        }
+        drawPath(path = innerPath, color = Color(0xFF00FF66), style = Stroke(width = 2f))
+
+        // Electric Neon Lightning Bolt
+        val boltPath = Path().apply {
+            moveTo(w * 0.54f, h * 0.22f)
+            lineTo(w * 0.34f, h * 0.52f)
+            lineTo(w * 0.48f, h * 0.52f)
+            lineTo(w * 0.42f, h * 0.78f)
+            lineTo(w * 0.68f, h * 0.46f)
+            lineTo(w * 0.54f, h * 0.46f)
+            close()
+        }
+        drawPath(path = boltPath, brush = Brush.linearGradient(listOf(Color(0xFF00FF66), Color(0xFF00E5FF))))
     }
 }
 
@@ -352,13 +400,22 @@ fun App() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "HYPERGAMEBOOSTER",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFF00FF66),
-                        fontSize = 18.sp
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    VipGamingLogo(modifier = Modifier.size(38.dp))
+                    Column {
+                        Text(
+                            "HYPERGAMEBOOSTER",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color(0xFF00FF66),
+                            fontSize = 17.sp
+                        )
+                        Text(
+                            "ESPORTS PERFORMANCE SUITE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF78909C),
+                            fontSize = 9.sp
+                        )
+                    }
                 }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
@@ -366,7 +423,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v6.0 ESPORTS MASTER",
+                        "v6.0 VIP",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),

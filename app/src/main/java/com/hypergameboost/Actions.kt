@@ -6,8 +6,6 @@ import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-enum class Profile { PERFORMANCE, BALANCED, BATTERY_SAVER }
-
 object Games {
     /** All official PUBG Mobile variants supported by HyperGameBooster */
     val known = linkedMapOf(
@@ -800,26 +798,6 @@ EOF
         "Cleared UE4 Crash & Stutter Dump Logs for $g"
     }
 
-    suspend fun artSpeedCompile(game: String): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
-        Shell.run("cmd package compile -m speed -f $g")
-        "ART Pre-Compilation Finished for $g (Profile: speed)"
-    }
-
-    suspend fun suspendHeavyApps(enable: Boolean): String = withContext(Dispatchers.IO) {
-        "Background apps suspended safely"
-    }
-
-    suspend fun purgeSystemServerAndTrim(): String = withContext(Dispatchers.IO) {
-        val script = """
-            pm trim-caches 4096M
-            settings put global aware_enabled 0
-            setprop persist.log.tag E
-        """.trimIndent()
-        Shell.run(script)
-        "Storage TRIM & Cache Purged"
-    }
-
     suspend fun queryLiveTelemetry(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
         val script = """
@@ -831,12 +809,6 @@ EOF
         """.trimIndent()
         val raw = Shell.run(script)
         "=== HYPEROS 3 & SNAPDRAGON TELEMETRY ===\n$raw"
-    }
-
-    suspend fun launchFreeformIpadView(game: String): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
-        Shell.run("settings put global enable_freeform_support 1; am start --windowingMode 5 $g")
-        "Launched $g in Freeform Window"
     }
 
     suspend fun enableVolumeTriggersViaShizuku(): String = withContext(Dispatchers.IO) {
@@ -1074,20 +1046,6 @@ EOF
         """.trimIndent()
         Shell.run(revertScript)
         "RESTORED ALL SETTINGS TO FACTORY DEFAULTS"
-    }
-
-    suspend fun cleanRam(keep: Set<String>, self: String): String = withContext(Dispatchers.IO) {
-        val pkgs = Shell.run("pm list packages -3")
-            .lines()
-            .mapNotNull { it.removePrefix("package:").trim().takeIf { p -> pkgRegex.matches(p) } }
-            .filter { it != self && it !in keep && it !in Games.known }
-        val script = pkgs.joinToString("\n") { "am force-stop $it" }
-        Shell.run(script)
-        "Processes Cleaned: ${pkgs.size}"
-    }
-
-    suspend fun trimCaches(): String = withContext(Dispatchers.IO) {
-        Shell.run("pm trim-caches 4096M").ifBlank { "Cache trimmed." }
     }
 
     suspend fun createSettingsSnapshot(): String = withContext(Dispatchers.IO) {
