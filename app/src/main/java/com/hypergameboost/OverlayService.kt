@@ -81,6 +81,7 @@ class OverlayService : Service() {
     // Overlays
     private var hudContainerView: View? = null
     private var hudView: TextView? = null
+    private var quickControlView: View? = null
     private var dockHandleView: TextView? = null
     private var dockExpandedView: LinearLayout? = null
     private var crosshairView: View? = null
@@ -93,6 +94,8 @@ class OverlayService : Service() {
 
     private var hudJob: Job? = null
     private var rfJob: Job? = null
+    private var overdriveJob: Job? = null
+    private var isOverdriveOn: Boolean = false
     private var game = ""
     private var layer: String? = null
 
@@ -222,6 +225,62 @@ class OverlayService : Service() {
         }
         container.addView(fixBtn)
 
+        val maxBtn = Button(this).apply {
+            text = "🔥MAX"
+            setTextColor(Color.parseColor("#FFD600"))
+            textSize = 9f
+            setBackgroundColor(Color.argb(230, 32, 24, 20))
+            setPadding(8, 0, 8, 0)
+            minHeight = 0
+            minimumHeight = 0
+            setOnClickListener {
+                triggerHaptic(40)
+                isOverdriveOn = !isOverdriveOn
+                if (isOverdriveOn) {
+                    text = "🔥ON"
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.parseColor("#D50000"))
+                    scope.launch {
+                        Actions.applyHotdropOverdrive(game, true)
+                        ui.post { Toast.makeText(this@OverlayService, "🔥 HOTDROP OVERDRIVE ACTIVE!", Toast.LENGTH_SHORT).show() }
+                    }
+                    overdriveJob?.cancel()
+                    overdriveJob = scope.launch {
+                        while (currentCoroutineContext().isActive && isOverdriveOn) {
+                            delay(15_000L)
+                            Actions.pinGameProcess(game)
+                        }
+                    }
+                } else {
+                    text = "🔥MAX"
+                    setTextColor(Color.parseColor("#FFD600"))
+                    setBackgroundColor(Color.argb(230, 32, 24, 20))
+                    overdriveJob?.cancel()
+                    overdriveJob = null
+                    scope.launch {
+                        Actions.applyHotdropOverdrive(game, false)
+                        ui.post { Toast.makeText(this@OverlayService, "Hotdrop Overdrive Off", Toast.LENGTH_SHORT).show() }
+                    }
+                }
+            }
+        }
+        container.addView(maxBtn)
+
+        val gearBtn = Button(this).apply {
+            text = "⚙️"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 10f
+            setBackgroundColor(Color.argb(230, 16, 26, 38))
+            setPadding(8, 0, 8, 0)
+            minHeight = 0
+            minimumHeight = 0
+            setOnClickListener {
+                triggerHaptic(30)
+                toggleQuickControlCard()
+            }
+        }
+        container.addView(gearBtn)
+
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -244,6 +303,9 @@ class OverlayService : Service() {
     private fun removeHud() {
         hudJob?.cancel()
         hudJob = null
+        overdriveJob?.cancel()
+        overdriveJob = null
+        removeQuickControlCard()
         hudContainerView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
         hudContainerView = null
         hudView = null
@@ -256,17 +318,19 @@ class OverlayService : Service() {
 
         while (currentCoroutineContext().isActive) {
             if (tick % 2 == 0) {
-                val ping = NativeTools.measureSocketPing("1.1.1.1", 53, 1000)
-                pingStr = if (ping > 0) "${ping}ms" else "--ms"
+                val pingReport = NativeTools.measureSocketPingWithJitter("1.1.1.1", 53, 1000)
+                pingStr = if (pingReport.pingMs > 0) "${pingReport.pingMs}ms (±${pingReport.jitterMs}ms)" else "--ms"
             }
 
             val b = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             val temp = (b?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f
+            NativeTools.SessionStatsTracker.recordTemp(temp)
             val powerDrain = NativeTools.getBatteryPowerDrain(this@OverlayService)
 
             val report = measureRealFps()
             if (report.liveFps > 0.0) {
                 lastFpsReport = report
+                NativeTools.SessionStatsTracker.recordFps(report.liveFps, report.onePercentLow)
             }
 
             val threat = AudioTest.currentThreatLevel
@@ -971,10 +1035,261 @@ class OverlayService : Service() {
         }
     }
 
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+
+    private fun toggleQuickControlCard() {
+        if (quickControlView != null) {
+            removeQuickControlCard()
+            return
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.argb(238, 12, 18, 28))
+            setPadding(20, 16, 20, 16)
+        }
+
+        // Header
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val title = TextView(this).apply {
+            text = "⚙️ ESPORTS QUICK CONTROLS"
+            textSize = 11f
+            setTextColor(Color.parseColor("#00E5FF"))
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val closeBtn = Button(this).apply {
+            text = "✖"
+            textSize = 10f
+            setTextColor(Color.parseColor("#FF5252"))
+            setBackgroundColor(Color.TRANSPARENT)
+            setPadding(8, 0, 8, 0)
+            minHeight = 0
+            minimumHeight = 0
+            setOnClickListener { removeQuickControlCard() }
+        }
+        header.addView(title)
+        header.addView(closeBtn)
+        card.addView(header)
+
+        // Divider
+        val div1 = View(this).apply {
+            setBackgroundColor(Color.parseColor("#1D293A"))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2).apply {
+                setMargins(0, 10, 0, 10)
+            }
+        }
+        card.addView(div1)
+
+        // In-Game Brightness Slider + Sunlight HBM
+        val brightLabel = TextView(this).apply {
+            text = "☀️ In-Game Brightness (0 - 255):"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+        }
+        card.addView(brightLabel)
+
+        val brightRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val seek = android.widget.SeekBar(this).apply {
+            max = 255
+            progress = 180
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        brightLabel.text = "☀️ In-Game Brightness: $progress"
+                        Sh.runAsync("settings put system screen_brightness_mode 0\nsettings put system screen_brightness $progress")
+                    }
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+            })
+        }
+        brightRow.addView(seek)
+
+        val hbmBtn = Button(this).apply {
+            text = "HBM MAX"
+            textSize = 9f
+            setTextColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#FFD600"))
+            setPadding(8, 2, 8, 2)
+            minHeight = 0
+            minimumHeight = 0
+            setOnClickListener {
+                triggerHaptic(30)
+                seek.progress = 255
+                brightLabel.text = "☀️ In-Game Brightness: 255 (HBM SUNLIGHT)"
+                Sh.runAsync("settings put system screen_brightness_mode 0\nsettings put system screen_brightness 255")
+                Toast.makeText(this@OverlayService, "☀️ HBM Sunlight Boost Activated!", Toast.LENGTH_SHORT).show()
+            }
+        }
+        brightRow.addView(hbmBtn)
+        card.addView(brightRow)
+
+        // Eagle Eye Saturation Row
+        val satLabel = TextView(this).apply {
+            text = "👁️ Eagle-Eye Camper Saturation:"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            setPadding(0, 8, 0, 4)
+        }
+        card.addView(satLabel)
+
+        val satRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        listOf(
+            "1.0x Normal" to {
+                scope.launch { Actions.applyCamperFilters("stock") }
+                Toast.makeText(this@OverlayService, "Saturation: 1.0x Stock", Toast.LENGTH_SHORT).show()
+            },
+            "1.4x Vivid" to {
+                scope.launch { Actions.applyCamperFilters("eagle_eye") }
+                Toast.makeText(this@OverlayService, "Saturation: 1.4x Vivid", Toast.LENGTH_SHORT).show()
+            },
+            "1.7x Spotter" to {
+                scope.launch { Shell.run("service call SurfaceFlinger 1022 f 1.7 2>/dev/null") }
+                Toast.makeText(this@OverlayService, "Saturation: 1.7x Max Spotter", Toast.LENGTH_SHORT).show()
+            },
+            "Scout Invert" to {
+                scope.launch { Actions.applyCamperFilters("scout_inversion") }
+                Toast.makeText(this@OverlayService, "Scout Inversion Active", Toast.LENGTH_SHORT).show()
+            }
+        ).forEach { (btnText, action) ->
+            val b = Button(this).apply {
+                text = btnText
+                textSize = 8.5f
+                setTextColor(Color.parseColor("#00FF66"))
+                setBackgroundColor(Color.argb(220, 20, 32, 48))
+                setPadding(6, 2, 6, 2)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(2, 0, 2, 0)
+                }
+                setOnClickListener { triggerHaptic(20); action() }
+            }
+            satRow.addView(b)
+        }
+        card.addView(satRow)
+
+        // Pointer Speed Switcher
+        val touchLabel = TextView(this).apply {
+            text = "⚡ Touch Pointer Speed:"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            setPadding(0, 8, 0, 4)
+        }
+        card.addView(touchLabel)
+
+        val touchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        listOf(
+            "Pointer: 4 (AR)" to 4,
+            "Pointer: 6 (Close)" to 6,
+            "Pointer: 7 (Max)" to 7
+        ).forEach { (label, speed) ->
+            val b = Button(this).apply {
+                text = label
+                textSize = 9f
+                setTextColor(Color.parseColor("#00E5FF"))
+                setBackgroundColor(Color.argb(220, 20, 32, 48))
+                setPadding(6, 2, 6, 2)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(2, 0, 2, 0)
+                }
+                setOnClickListener {
+                    triggerHaptic(20)
+                    Sh.runAsync("settings put system pointer_speed $speed")
+                    Toast.makeText(this@OverlayService, "Pointer Speed: $speed", Toast.LENGTH_SHORT).show()
+                }
+            }
+            touchRow.addView(b)
+        }
+        card.addView(touchRow)
+
+        // Audio Footstep & Bypass Charge Row
+        val toggleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 8, 0, 0)
+        }
+        var footstepOn = false
+        val footstepBtn = Button(this).apply {
+            text = "🎧 Footstep EQ: OFF"
+            textSize = 9f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(220, 20, 32, 48))
+            setPadding(6, 2, 6, 2)
+            minHeight = 0
+            minimumHeight = 0
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(2, 0, 2, 0)
+            }
+            setOnClickListener {
+                triggerHaptic(25)
+                footstepOn = !footstepOn
+                text = if (footstepOn) "🎧 Footstep EQ: ON" else "🎧 Footstep EQ: OFF"
+                scope.launch { AudioTest.applyPreset(if (footstepOn) 1 else 0) }
+            }
+        }
+        toggleRow.addView(footstepBtn)
+
+        val bypassBtn = Button(this).apply {
+            text = if (Actions.isBypassChargingOn) "🔌 Bypass: ON" else "🔌 Bypass: OFF"
+            textSize = 9f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(220, 20, 32, 48))
+            setPadding(6, 2, 6, 2)
+            minHeight = 0
+            minimumHeight = 0
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(2, 0, 2, 0)
+            }
+            setOnClickListener {
+                triggerHaptic(25)
+                val next = !Actions.isBypassChargingOn
+                text = if (next) "🔌 Bypass: ON" else "🔌 Bypass: OFF"
+                scope.launch { Actions.setBypassCharging(next) }
+            }
+        }
+        toggleRow.addView(bypassBtn)
+        card.addView(toggleRow)
+
+        val lp = WindowManager.LayoutParams(
+            dpToPx(310),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 30
+            y = 80
+        }
+
+        wm.addView(card, lp)
+        quickControlView = card
+    }
+
+    private fun removeQuickControlCard() {
+        quickControlView?.let { try { wm.removeView(it) } catch (_: Throwable) {} }
+        quickControlView = null
+    }
+
     private fun takeScreenshot() {
         dockExpandedView?.visibility = View.INVISIBLE
         dockHandleView?.visibility = View.INVISIBLE
         hudContainerView?.visibility = View.INVISIBLE
+        quickControlView?.visibility = View.INVISIBLE
         scope.launch {
             delay(250)
             val file = "/sdcard/Pictures/HGB_${System.currentTimeMillis()}.png"
@@ -983,6 +1298,7 @@ class OverlayService : Service() {
                 dockExpandedView?.visibility = View.VISIBLE
                 dockHandleView?.visibility = View.VISIBLE
                 hudContainerView?.visibility = View.VISIBLE
+                quickControlView?.visibility = View.VISIBLE
                 Toast.makeText(
                     this@OverlayService,
                     if (out.isBlank()) "📸 Saved: $file" else "Screenshot: $out",
@@ -996,6 +1312,9 @@ class OverlayService : Service() {
         hideAfk()
         removeCyberDock()
         removeHud()
+        removeQuickControlCard()
+        overdriveJob?.cancel()
+        overdriveJob = null
         CrosshairSettings.style = 0
         updateCrosshair()
         showAuxLine = false

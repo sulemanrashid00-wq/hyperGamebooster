@@ -32,6 +32,72 @@ data class FpsReport(
     val frameTimeMs: Double
 )
 
+data class PingJitterReport(
+    val pingMs: Long,
+    val jitterMs: Long
+)
+
+object SessionStatsTracker {
+    private var totalFpsSamples = 0L
+    private var sumFps = 0.0
+    var minOnePercentLow: Double = 999.0
+        private set
+    var avgFps: Double = 0.0
+        private set
+    var bestPingMs: Long = 999L
+        private set
+    var peakTempC: Float = 0f
+        private set
+    var startTimeMs: Long = System.currentTimeMillis()
+        private set
+
+    @Synchronized
+    fun recordFps(liveFps: Double, onePercentLow: Double) {
+        if (liveFps > 10.0) {
+            totalFpsSamples++
+            sumFps += liveFps
+            avgFps = sumFps / totalFpsSamples
+            if (onePercentLow > 10.0 && onePercentLow < minOnePercentLow) {
+                minOnePercentLow = onePercentLow
+            }
+        }
+    }
+
+    @Synchronized
+    fun recordPing(pingMs: Long) {
+        if (pingMs > 0 && pingMs < bestPingMs) {
+            bestPingMs = pingMs
+        }
+    }
+
+    @Synchronized
+    fun recordTemp(tempC: Float) {
+        if (tempC > peakTempC) {
+            peakTempC = tempC
+        }
+    }
+
+    @Synchronized
+    fun reset() {
+        totalFpsSamples = 0L
+        sumFps = 0.0
+        minOnePercentLow = 999.0
+        avgFps = 0.0
+        bestPingMs = 999L
+        peakTempC = 0f
+        startTimeMs = System.currentTimeMillis()
+    }
+
+    fun hasStats(): Boolean = totalFpsSamples > 0 || bestPingMs < 999L
+
+    fun getDurationFormatted(): String {
+        val sec = ((System.currentTimeMillis() - startTimeMs) / 1000L).coerceAtLeast(0)
+        val mins = sec / 60
+        val s = sec % 60
+        return "${mins}m ${s}s"
+    }
+}
+
 /**
  * Native Android API features (Tier-1: No ADB / No Root required) - v3.0 Ultimate
  * - Real-Time FPS, 1% Low FPS & Frame-time tracker
@@ -248,8 +314,10 @@ object NativeTools {
     }
 
     // =========================================================================
-    // 6. Live Socket Ping Radar (1.1.1.1:53 with 1200ms timeout)
+    // 6. Live Socket Ping Radar & Jitter Tracker (1.1.1.1:53 with 1200ms timeout)
     // =========================================================================
+    private val pingHistory = ArrayList<Long>()
+
     suspend fun measureSocketPing(host: String = "1.1.1.1", port: Int = 53, timeoutMs: Int = 1200): Long =
         withContext(Dispatchers.IO) {
             var socket: Socket? = null
@@ -265,6 +333,23 @@ object NativeTools {
                 try { socket?.close() } catch (_: Throwable) { }
             }
         }
+
+    suspend fun measureSocketPingWithJitter(host: String = "1.1.1.1", port: Int = 53, timeoutMs: Int = 1200): PingJitterReport {
+        val ping = measureSocketPing(host, port, timeoutMs)
+        if (ping <= 0) return PingJitterReport(-1L, 0L)
+
+        synchronized(pingHistory) {
+            pingHistory.add(ping)
+            if (pingHistory.size > 6) pingHistory.removeAt(0)
+            val avg = pingHistory.average()
+            val jitter = if (pingHistory.size > 1) {
+                pingHistory.map { kotlin.math.abs(it - avg) }.average().toLong()
+            } else 0L
+
+            SessionStatsTracker.recordPing(ping)
+            return PingJitterReport(ping, jitter)
+        }
+    }
 
     // =========================================================================
     // 7. 400Hz+ Gyroscope Hardware Warmup Pad

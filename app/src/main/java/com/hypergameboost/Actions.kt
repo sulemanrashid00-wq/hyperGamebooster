@@ -539,11 +539,25 @@ EOF
     suspend fun pinGameProcess(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
         val script = """
-            PUBG_PID=${'$'}(pidof $g)
+            PUBG_PID=${'$'}(pidof $g 2>/dev/null)
             if [ ! -z "${'$'}PUBG_PID" ]; then
-                taskset -p -a ff ${'$'}PUBG_PID
-                ionice -c 2 -n 0 -p ${'$'}PUBG_PID
-                echo "PID ${'$'}PUBG_PID pinned to Prime CPU cores"
+                # 1. Main process affinity & realtime nice
+                taskset -p -a ff ${'$'}PUBG_PID 2>/dev/null
+                ionice -c 2 -n 0 -p ${'$'}PUBG_PID 2>/dev/null
+                renice -n -20 -p ${'$'}PUBG_PID 2>/dev/null
+
+                # 2. Pin critical UE4 child threads (RenderThread, GameThread, RHIThread) to Snapdragon Prime/Gold cores (f0)
+                for TID_DIR in /proc/${'$'}PUBG_PID/task/*; do
+                    TID=${'$'}(basename ${'$'}TID_DIR)
+                    COMM=${'$'}(cat ${'$'}TID_DIR/comm 2>/dev/null)
+                    case "${'$'}COMM" in
+                        *RenderThread*|*GameThread*|*RHIThread*|*FAsyncLoading*|*PoolThread*)
+                            taskset -p f0 ${'$'}TID 2>/dev/null
+                            renice -n -20 -p ${'$'}TID 2>/dev/null
+                            ;;
+                    esac
+                done
+                echo "PID ${'$'}PUBG_PID & UE4 RenderThread/GameThread pinned to Prime Cores (f0)"
             else
                 echo "Game process not running yet"
             fi
@@ -551,15 +565,14 @@ EOF
         Shell.run(script)
     }
 
+    suspend fun pinGameToPrimeCoresAndWatchdog(game: String): String = pinGameProcess(game)
+
     suspend fun watchdogTick(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
+        pinGameProcess(g)
         val script = """
             am force-stop com.xiaomi.joyose
             cmd thermalservice override-status 0
-            PUBG_PID=${'$'}(pidof $g)
-            if [ ! -z "${'$'}PUBG_PID" ]; then
-                taskset -p -a ff ${'$'}PUBG_PID
-            fi
         """.trimIndent()
         Shell.run(script)
         lockHardware120HzDisplayMode()
@@ -579,6 +592,8 @@ EOF
             "rikka.shizuku",
             "com.whatsapp",
             "com.google.android.inputmethod.latin",
+            "com.baidu.input_mi",
+            "com.sohu.inputmethod.sogou.xiaomi",
             "com.google.android.inputmethod.korean",
             "com.miui.securitycenter",
             "com.miui.home",
@@ -595,6 +610,17 @@ EOF
         )
 
         val knownXiaomiBloat = listOf(
+            // HyperOS China ROM specific background bloat
+            "com.miui.personalassistant",
+            "com.miui.contentextension",
+            "com.miui.voiceassist",
+            "com.miui.hybrid",
+            "com.xiaomi.market",
+            "com.xiaomi.vipaccount",
+            "com.miui.bugreport",
+            "com.xiaomi.joyose",
+            "com.miui.analytics",
+            "com.miui.msa.global",
             "com.miui.Video",
             "com.miui.player",
             "com.xiaomi.mipicks",
@@ -602,8 +628,6 @@ EOF
             "com.miui.yellowpage",
             "com.miui.CleanMaster",
             "com.miui.android.fashiongallery",
-            "com.miui.analytics",
-            "com.miui.msa.global",
             "com.zhiliaoapp.musically",
             "com.instagram.android",
             "com.facebook.katana"
@@ -1127,6 +1151,67 @@ EOF
         } else {
             Shell.run("settings put system music_in_communication 0; settings put secure music_in_communication 0; setprop audio.safemedia.bypass false")
             "Audio Latency Reset to Stock"
+        }
+    }
+
+    suspend fun applyUsbDacSplitterGuard(enable: Boolean): String = withContext(Dispatchers.IO) {
+        if (enable) {
+            val script = """
+                settings put global usb_audio_automatic_routing_disabled 0
+                settings put secure usb_audio_automatic_routing_disabled 0
+                settings put system miui_audio_dump_enable 0
+                settings put secure music_in_communication 1
+                settings put system music_in_communication 1
+                setprop persist.vendor.audio.fluence.voicecall false
+                setprop debug.audio.usb.period_us 2500
+                setprop audio.safemedia.bypass true
+                setprop debug.audio.silent 0
+                setprop vendor.audio.lowlatency.enable true
+                setprop media.stagefright.low-latency 1
+                settings put global bluetooth_disable_absolute_volume 1
+            """.trimIndent()
+            Shell.run(script)
+            "🎧 Type-C Dual Adapter & USB DAC 48/96kHz Stability ACTIVE"
+        } else {
+            val script = """
+                settings put system music_in_communication 0
+                settings put secure music_in_communication 0
+                setprop persist.vendor.audio.fluence.voicecall true
+                setprop audio.safemedia.bypass false
+            """.trimIndent()
+            Shell.run(script)
+            "USB DAC & Splitter Guard RESTORED to stock"
+        }
+    }
+
+    @Volatile var isHotdropOverdriveActive: Boolean = false
+
+    suspend fun applyHotdropOverdrive(game: String, enable: Boolean): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        isHotdropOverdriveActive = enable
+        if (enable) {
+            val script = """
+                cmd thermalservice override-status 0 2>/dev/null
+                cmd power set-fixed-performance-mode-enabled true 2>/dev/null
+                service call SurfaceFlinger 1008 i32 1 2>/dev/null
+                setprop debug.sf.gpu_freq_index 0
+                setprop debug.sf.cpu_freq_index 0
+                setprop vendor.gpu.control.level 3
+                echo performance > /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null
+                echo 500000000 > /sys/class/kgsl/kgsl-3d0/min_clock_mhz 2>/dev/null
+            """.trimIndent()
+            Shell.run(script)
+            pinGameProcess(g)
+            "🔥 HOTDROP OVERDRIVE ACTIVE (120 FPS Locked in Smoke/Close-Range)"
+        } else {
+            val script = """
+                cmd power set-fixed-performance-mode-enabled false 2>/dev/null
+                service call SurfaceFlinger 1008 i32 0 2>/dev/null
+                echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null
+                echo 0 > /sys/class/kgsl/kgsl-3d0/min_clock_mhz 2>/dev/null
+            """.trimIndent()
+            Shell.run(script)
+            "Hotdrop Overdrive Restored"
         }
     }
 

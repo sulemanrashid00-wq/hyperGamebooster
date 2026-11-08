@@ -440,7 +440,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v5.0 GOD-TIER",
+                        "v6.0 APEX",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -608,6 +608,51 @@ fun App() {
                             ) {
                                 Text(btnLaunchText, color = Color.White, fontSize = 13.sp)
                             }
+                        }
+                    }
+
+                    SectionCard("📊 LAST GAMING SESSION TELEMETRY SUMMARY", "Real-time hardware statistics recorded during gameplay") {
+                        var refreshTrigger by remember { mutableStateOf(0) }
+                        val tracker = NativeTools.SessionStatsTracker
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("Session Duration", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                Text(tracker.getDurationFormatted(), color = Color(0xFF00E5FF), fontSize = 13.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Average FPS", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                Text(if (tracker.avgFps > 0) "${"%.1f".format(tracker.avgFps)} FPS" else "-- FPS", color = Color(0xFF00FF66), fontSize = 13.sp)
+                            }
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text("Lowest 1% Low", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                Text(if (tracker.minOnePercentLow < 999.0) "${"%.1f".format(tracker.minOnePercentLow)} FPS" else "-- FPS", color = Color(0xFFFFD600), fontSize = 13.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Best Ping", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                Text(if (tracker.bestPingMs < 999L) "${tracker.bestPingMs}ms" else "--ms", color = Color(0xFF00E5FF), fontSize = 13.sp)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Peak Battery Temp", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                                Text(if (tracker.peakTempC > 0f) "${"%.1f".format(tracker.peakTempC)}°C" else "--°C", color = if (tracker.peakTempC > 42f) Color(0xFFFF5252) else Color(0xFF00FF66), fontSize = 13.sp)
+                            }
+                        }
+
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                triggerVibe(ctx)
+                                tracker.reset()
+                                refreshTrigger++
+                                statusLog = "Session Telemetry Stats Reset"
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF263238))
+                        ) {
+                            Text("RESET SESSION STATS", fontSize = 11.sp, color = Color(0xFF90A4AE))
                         }
                     }
 
@@ -1009,6 +1054,16 @@ fun App() {
                             enabled = isReady,
                             onAction = { exec { Actions.applyAudioAndDacFix(true) } },
                             offAction = { exec { Actions.applyAudioAndDacFix(false) } }
+                        )
+                    }
+
+                    SectionCard("🔌 TYPE-C DUAL ADAPTER & USB DAC AUDIO GUARD", "Fixes splitter cutouts, sets 2.5ms DAC buffer & prevents mic echo") {
+                        ToggleRow(
+                            label = "🎧 Lock USB Type-C DAC + Splitter Power Stability",
+                            subtitle = "Disables USB autosuspend, sets 2.5ms DAC period & stops mic footstep muffling",
+                            enabled = isReady,
+                            onAction = { exec { Actions.applyUsbDacSplitterGuard(true) } },
+                            offAction = { exec { Actions.applyUsbDacSplitterGuard(false) } }
                         )
                     }
 
