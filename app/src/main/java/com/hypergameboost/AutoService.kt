@@ -18,9 +18,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Auto mode: game foreground mein aate hi Esports Mode on, game se bahar jaate hi (kuch der baad)
- * sab kuch default par wapas. Shizuku chalte rehna zaroori hai.
- * Polling halki rakhi gayi hai (idle 4 sec, game ke dauran 8 sec) taake khud stutter na kare.
+ * AutoService - HyperOS 3 Game Space & Joyose 60-Second Watchdog (Section 2 & 5)
+ * - Automatically detects PUBG / BGMI foreground state
+ * - Activates 120 FPS Esports Engine & WildBoost 3.0
+ * - 60-Second Watchdog Loop:
+ *   1. Restricts PowerKeeper & MIUI Daemon
+ *   2. Kills com.xiaomi.joyose to prevent mid-match HyperOS thermal lock
+ *   3. Re-applies thermal override status 0
+ *   4. Pins game PID to Prime CPU cores (taskset ff) & Real-time I/O (ionice -c 2 -n 0)
+ * - Restores default system governor when game closes
  */
 class AutoService : Service() {
     private var job: Job? = null
@@ -28,58 +34,85 @@ class AutoService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val game = intent?.getStringExtra(EXTRA_GAME)
-        if (game == null || game !in Games.known) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        val game = intent?.getStringExtra(EXTRA_GAME) ?: "com.tencent.ig"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto mode", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster Auto mode")
-            .setContentText("${Games.known[game]} ka intezaar...")
+            .setContentTitle("HyperGameBooster Watchdog Active")
+            .setContentText("Monitoring $game & HyperOS 3 Engine")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
-        if (Build.VERSION.SDK_INT >= 34) {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, n)
         }
+
         job?.cancel()
-        job = CoroutineScope(Dispatchers.IO).launch { watch(game) }
+        job = CoroutineScope(Dispatchers.IO).launch {
+            // Apply initial Joyose and Powerkeeper restrictions
+            Actions.restrictPowerKeeperAndJoyose()
+            runWatchdog(game)
+        }
         return START_NOT_STICKY
     }
 
-    private suspend fun watch(game: String) {
-        var active = false
-        var missing = 0
+    private suspend fun runWatchdog(game: String) {
+        var isGameActive = false
+        var consecutiveMissing = 0
+        var watchdogTimer = 0L
+
         while (currentCoroutineContext().isActive) {
-            val top = Sh.run("dumpsys activity activities | grep -m 3 -E 'topResumedActivity|mResumedActivity'")
-            val inGame = top.contains(game)
+            val topActivity = Sh.run("dumpsys activity activities | grep -m 3 -E 'topResumedActivity|mResumedActivity'")
+            val inGame = topActivity.contains(game)
+
             if (inGame) {
-                missing = 0
-                if (!active) {
-                    active = true
+                consecutiveMissing = 0
+                if (!isGameActive) {
+                    isGameActive = true
+                    // Activate full Esports Engine + WildBoost + FEAS
                     Actions.esportsMode(game, packageName)
-                    // Per-game saved profile (GFX tab: "Is game ke liye save")
+                    NativeTools.startAdpfSession(this@AutoService, 8333333L)
+                    NativeTools.setWifiLowLatency(this@AutoService, true)
+
+                    // Pin CPU and enforce thermal immediately
+                    Actions.pinGameProcess(game)
+
+                    // Check user per-game custom preferences
                     val sp = getSharedPreferences("hgb", Context.MODE_PRIVATE)
                     val ds = sp.getString("ds_$game", null)
                     val fps = sp.getInt("fps_$game", 0)
-                    if (ds != null && fps != 0) Actions.gameModeTuning(game, fps, ds)
+                    if (ds != null && fps != 0) {
+                        Actions.applyDownscaleAndFps(game, ds, fps)
+                    }
                     val res = sp.getInt("res_$game", 0)
-                    if (res in 55..99) Actions.setResolution(res)
-                    sp.getString("stretch_$game", null)?.split(":")?.let { if (it.size == 2) Actions.stretchResolution(it[0], it[1]) }
+                    if (res in 55..99) {
+                        Actions.setResolution(res)
+                    }
                 }
-            } else if (active) {
-                missing++
-                if (missing >= 3) {
+
+                // 60-Second Watchdog Loop execution
+                val now = System.currentTimeMillis()
+                if (now - watchdogTimer >= 60_000L) {
+                    watchdogTimer = now
+                    Actions.watchdogTick(game)
+                    NativeTools.reportAdpfWork(8000000L)
+                }
+            } else if (isGameActive) {
+                consecutiveMissing++
+                // If game is not in foreground for 3 consecutive checks (~15-18 seconds)
+                if (consecutiveMissing >= 3) {
                     Actions.revertAll(game)
-                    active = false
-                    missing = 0
+                    NativeTools.stopAdpfSession()
+                    NativeTools.setWifiLowLatency(this@AutoService, false)
+                    isGameActive = false
+                    consecutiveMissing = 0
                 }
             }
-            delay(if (active) 10000L else 6000L)
+
+            delay(if (isGameActive) 6000L else 4000L)
         }
     }
 
@@ -90,6 +123,6 @@ class AutoService : Service() {
 
     companion object {
         const val EXTRA_GAME = "game"
-        private const val CHANNEL = "auto_mode"
+        private const val CHANNEL = "auto_watchdog_channel"
     }
 }

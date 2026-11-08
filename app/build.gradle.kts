@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace = "com.hypergameboost"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.hypergameboost"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        targetSdk = 35
+        versionCode = 2
+        versionName = "2.0.0"
     }
 
     buildTypes {
@@ -37,7 +37,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // Shizuku
+    // Shizuku API & Provider
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 }
