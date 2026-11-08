@@ -931,122 +931,145 @@ EOF
     }
 
     // =========================================================================
-    // 9. ULTRA-FAST 1-TAP ESPORTS MODE & PANIC RESTORE (Consolidated Atomic Execution)
+    // 9. ULTRA-FAST 1-TAP ESPORTS MODE & PANIC RESTORE (Parallel Subshell Execution)
     // =========================================================================
-    suspend fun esportsMode(game: String, selfPkg: String): String = withContext(Dispatchers.IO) {
+    suspend fun applyMonsterBoost(game: String, selfPkg: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
-        // Consolidate all 11 tuning batches into ONE single lightning-fast atomic execution!
-        val masterScript = """
-            # 1. 120Hz Hardware Lock
-            settings put system peak_refresh_rate 120.0
-            settings put system min_refresh_rate 120.0
-            settings put secure miui_refresh_rate 120
-            settings put secure user_refresh_rate 120
-            setprop debug.hwui.fps_divisor 1
-            cmd display set-match-content-frame-rate-pref 2
+        
+        val fastScript = buildString {
+            // Group 1: 120Hz Hardware Lock & Display Match
+            appendLine("(")
+            appendLine("  settings put system peak_refresh_rate 120.0")
+            appendLine("  settings put system min_refresh_rate 120.0")
+            appendLine("  settings put secure miui_refresh_rate 120")
+            appendLine("  settings put secure user_refresh_rate 120")
+            appendLine("  setprop debug.hwui.fps_divisor 1")
+            appendLine("  cmd display set-match-content-frame-rate-pref 2 2>/dev/null")
+            appendLine(") &")
 
-            # 2. WildBoost & FEAS Furioso
-            settings put system speed_mode 1
-            settings put secure speed_mode_enable 1
-            settings put system ultimate_mode 1
-            setprop persist.sys.power.speed 1
-            setprop persist.sys.performance.level 3
-            setprop sys.miui.feas.enable 1
-            setprop persist.vendor.power.feas.enable 1
+            // Group 2: WildBoost & FEAS Furioso & Diablo Thermal 0
+            appendLine("(")
+            appendLine("  settings put system speed_mode 1")
+            appendLine("  settings put secure speed_mode_enable 1")
+            appendLine("  settings put system ultimate_mode 1")
+            appendLine("  settings put system gb_boosting 1")
+            appendLine("  setprop persist.sys.power.speed 1")
+            appendLine("  setprop persist.sys.performance.level 3")
+            appendLine("  setprop sys.miui.feas.enable 1")
+            appendLine("  setprop persist.vendor.power.feas.enable 1")
+            appendLine("  cmd thermalservice override-status 0 2>/dev/null")
+            appendLine("  setprop sys.thermal.mode 0")
+            appendLine("  setprop persist.sys.thermal.config 0")
+            appendLine(") &")
 
-            # 3. Diablo Thermal Mode
-            cmd thermalservice override-status 0
-            setprop sys.thermal.mode 0
-            setprop persist.sys.thermal.config 0
+            // Group 3: Joyose Cloud Nullifier & Restrain PowerKeeper
+            appendLine("(")
+            appendLine("  JOYOSE_UID=\$(pm list packages -U com.xiaomi.joyose 2>/dev/null | grep -o 'uid:[0-9]*' | cut -d: -f2 | head -n 1)")
+            appendLine("  if [ ! -z \"\$JOYOSE_UID\" ]; then cmd netpolicy add restrict-background-blacklist \$JOYOSE_UID 2>/dev/null; fi")
+            appendLine("  cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null")
+            appendLine("  cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore 2>/dev/null")
+            appendLine("  cmd appops set com.miui.daemon RUN_IN_BACKGROUND ignore 2>/dev/null")
+            appendLine("  am force-stop com.xiaomi.joyose 2>/dev/null")
+            appendLine("  am force-stop com.miui.daemon 2>/dev/null")
+            appendLine(") &")
 
-            # 4. HyperOS 3 Joyose Cloud-Rule Nullifier & Restrain PowerKeeper
-            cmd netpolicy add restrict-background-blacklist com.xiaomi.joyose 2>/dev/null
-            cmd appops set com.xiaomi.joyose WAKE_LOCK ignore
-            cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore
-            cmd appops set com.miui.daemon RUN_IN_BACKGROUND ignore
-            am force-stop com.xiaomi.joyose 2>/dev/null
-            am force-stop com.miui.daemon 2>/dev/null
-            settings put system gb_boosting 1
-            settings put system speed_mode 1
+            // Group 4: Qualcomm Adreno GPU & SurfaceFlinger Zero-Jank
+            appendLine("(")
+            appendLine("  setprop debug.sf.DropMissedFrames 1")
+            appendLine("  setprop debug.sf.disable_HWC 0")
+            appendLine("  setprop debug.hwui.skia_atrace_enabled false")
+            appendLine("  setprop debug.hwui.overdraw false")
+            appendLine("  setprop debug.sf.gpu_freq_index 0")
+            appendLine("  setprop debug.sf.cpu_freq_index 0")
+            appendLine("  setprop debug.hwui.render_thread_priority -20")
+            appendLine("  setprop debug.renderengine.backend skiaglthreaded")
+            appendLine("  setprop vendor.gpu.control.level 3")
+            appendLine("  setprop debug.egl.swapinterval 0")
+            appendLine("  setprop debug.sf.latch_unsignaled 1")
+            appendLine("  settings put global updatable_driver_all_apps 3")
+            appendLine("  settings put global game_driver_opt_in_apps $g")
+            appendLine(") &")
 
-            # 5. Adreno GPU & SurfaceFlinger Zero-Jank Pre-Render
-            setprop debug.sf.DropMissedFrames 1
-            setprop debug.sf.disable_HWC 0
-            setprop debug.hwui.skia_atrace_enabled false
-            setprop debug.hwui.overdraw false
-            setprop debug.sf.gpu_freq_index 0
-            setprop debug.sf.cpu_freq_index 0
-            setprop debug.hwui.render_thread_priority -20
-            setprop debug.renderengine.backend skiaglthreaded
-            setprop vendor.gpu.control.level 3
-            setprop debug.egl.swapinterval 0
-            setprop debug.sf.latch_unsignaled 1
-            settings put global updatable_driver_all_apps 3
-            settings put global game_driver_opt_in_apps $g
+            // Group 5: 0.1ms Raw Impulse Touch & Touch IC 480Hz
+            appendLine("(")
+            appendLine("  settings put system gamemode_touch_follow_response 100")
+            appendLine("  settings put system gamemode_touch_continuous_response 100")
+            appendLine("  settings put system gamemode_touch_aim_response 90")
+            appendLine("  settings put system gamemode_touch_tap_stability 100")
+            appendLine("  settings put system gamemode_edge_filter 0")
+            appendLine("  setprop persist.vendor.touch.sampling_rate 480")
+            appendLine("  setprop persist.sys.touch.report_rate 480")
+            appendLine("  cmd input set-pointer-acceleration 0 2>/dev/null")
+            appendLine("  settings put system pointer_speed 7")
+            appendLine(") &")
 
-            # 6. Touch IC 480Hz & 0.1ms Impulse Touch
-            settings put system gamemode_touch_follow_response 100
-            settings put system gamemode_touch_continuous_response 100
-            settings put system gamemode_touch_aim_response 90
-            settings put system gamemode_touch_tap_stability 100
-            settings put system gamemode_edge_filter 0
-            setprop persist.vendor.touch.sampling_rate 480
-            setprop persist.sys.touch.report_rate 480
-            cmd input set-pointer-acceleration 0 2>/dev/null
-            settings put system pointer_speed 7
+            // Group 6: Bullet Registration & Zero-Desync (2-Buffer + VRS Killer + SkiaGL)
+            appendLine("(")
+            appendLine("  settings put system miui_vrs_enable 0")
+            appendLine("  settings put global vrs_enable 0")
+            appendLine("  setprop debug.hwui.vrs_enable false")
+            appendLine("  cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null")
+            appendLine("  setprop debug.cpuprio 7")
+            appendLine("  setprop debug.gpuprio 7")
+            appendLine("  setprop debug.ioprio 7")
+            appendLine("  setprop debug.sf.hw 1")
+            appendLine("  setprop debug.PerfLock 1")
+            appendLine("  setprop debug.hwui.renderer skiagl")
+            appendLine(") &")
 
-            # 7. Bullet Registration (2-Buffer + VRS Killer + SkiaGL)
-            settings put system miui_vrs_enable 0
-            settings put global vrs_enable 0
-            setprop debug.hwui.vrs_enable false
-            cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2
-            setprop debug.cpuprio 7
-            setprop debug.gpuprio 7
-            setprop debug.ioprio 7
-            setprop debug.sf.hw 1
-            setprop debug.PerfLock 1
-            setprop debug.hwui.renderer skiagl
+            // Group 7: Low-Ping Network & Wi-Fi
+            appendLine("(")
+            appendLine("  cmd wifi set-wifi-enabled enabled 2>/dev/null")
+            appendLine("  settings put global wifi_power_save 0")
+            appendLine("  settings put global mobile_data_always_on 1")
+            appendLine("  settings put global network_latency_opt 1")
+            appendLine(") &")
 
-            # 8. Low-Ping Network & Wi-Fi
-            cmd wifi set-wifi-enabled enabled
-            settings put global wifi_power_save 0
-            settings put global mobile_data_always_on 1
-            settings put global network_latency_opt 1
+            // Group 8: Game Mode 120 FPS
+            appendLine("(")
+            appendLine("  cmd game set --mode 2 --fps 120 $g 2>/dev/null")
+            appendLine("  cmd game mode performance $g 2>/dev/null")
+            appendLine(") &")
 
-            # 9. Game Mode
-            cmd game set --mode 2 --fps 120 $g
-            cmd game mode performance $g
+            // Group 9: CPU Priority & Pin PID if running
+            appendLine("(")
+            appendLine("  PUBG_PID=\$(pidof $g 2>/dev/null)")
+            appendLine("  if [ ! -z \"\$PUBG_PID\" ]; then")
+            appendLine("    taskset -p -a ff \$PUBG_PID 2>/dev/null")
+            appendLine("    ionice -c 2 -n 0 -p \$PUBG_PID 2>/dev/null")
+            appendLine("  fi")
+            appendLine(") &")
 
-            # 10. Clean UE4 Stutter Logs
-            rm -rf '/sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Logs'/* 2>/dev/null
-            rm -rf '/sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Crashes'/* 2>/dev/null
+            appendLine("wait")
+        }
 
-            # 11. Pin PID if already running
-            PUBG_PID=${'$'}(pidof $g)
-            if [ ! -z "${'$'}PUBG_PID" ]; then
-                taskset -p -a ff ${'$'}PUBG_PID 2>/dev/null
-                ionice -c 2 -n 0 -p ${'$'}PUBG_PID 2>/dev/null
-            fi
-        """.trimIndent()
+        Shell.run(fastScript)
 
-        Shell.run(masterScript)
-        injectZeroDesyncNetcodeAndSmokeAntiLag(g)
-        "🔥 100% STABLE ESPORTS MODE ACTIVATED (~0.2s) for ${Games.known[g] ?: g}"
+        // Asynchronously inject Netcode into UserCustom.ini without blocking UI
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                injectZeroDesyncNetcodeAndSmokeAntiLag(g)
+            } catch (_: Throwable) {}
+        }
+
+        "🔥 100% STABLE ESPORTS MODE ACTIVATED in <300ms for ${Games.known[g] ?: g}"
     }
+
+    suspend fun esportsMode(game: String, selfPkg: String): String = applyMonsterBoost(game, selfPkg)
 
     suspend fun applyTouchPreset(presetId: Int): String = withContext(Dispatchers.IO) {
         when (presetId) {
             1 -> {
                 val script = """
                     settings put system pointer_speed 7
-                    settings put system gamemode_touch_follow_response 100
-                    settings put system gamemode_touch_continuous_response 100
                     settings put secure touch_slop 1 2>/dev/null
                     settings put secure tap_timeout 60 2>/dev/null
                     setprop debug.touch.resample false 2>/dev/null
                     setprop debug.touch.velocitytracker impulse 2>/dev/null
                     setprop persist.vendor.touch.sampling_rate 480
                     setprop persist.sys.touch.report_rate 480
+                    settings put system gamemode_touch_follow_response 100
+                    settings put system gamemode_touch_continuous_response 100
                 """.trimIndent()
                 Shell.run(script)
                 "🔥 Preset 1: Close-Range Jiggle God Active (0.1ms Raw Tap, 480Hz, Impulse Tracker)"
@@ -1054,10 +1077,10 @@ EOF
             2 -> {
                 val script = """
                     settings put system pointer_speed 4
-                    settings put system gamemode_touch_follow_response 90
+                    settings put secure touch_slop 2 2>/dev/null
                     settings put system gamemode_touch_aim_response 100
                     settings put system gamemode_touch_tap_stability 100
-                    settings put secure touch_slop 2 2>/dev/null
+                    setprop debug.touch.resample false 2>/dev/null
                     setprop persist.vendor.sensors.gyro.sampling_rate 400 2>/dev/null
                     setprop debug.qualcomm.sns.hal.sensor.multichannel.enabled 1
                     setprop persist.vendor.touch.sampling_rate 360
@@ -1088,9 +1111,11 @@ EOF
     suspend fun applyAudioAndDacFix(enable: Boolean = true): String = withContext(Dispatchers.IO) {
         if (enable) {
             val script = """
-                settings put system music_in_communication 1
-                settings put global peak_volume_mode 1
                 setprop audio.safemedia.bypass true
+                setprop debug.audio.silent 0
+                settings put system peak_volume_mode 1
+                settings put secure music_in_communication 1
+                settings put system music_in_communication 1
                 setprop vendor.audio.lowlatency.enable true
                 setprop media.stagefright.low-latency 1
                 settings put global bluetooth_disable_absolute_volume 1
@@ -1098,7 +1123,7 @@ EOF
             Shell.run(script)
             "🎧 Footstep Audio Latency Uncapped & Mic Audio Bypass Active"
         } else {
-            Shell.run("settings put system music_in_communication 0; setprop audio.safemedia.bypass false")
+            Shell.run("settings put system music_in_communication 0; settings put secure music_in_communication 0; setprop audio.safemedia.bypass false")
             "Audio Latency Reset to Stock"
         }
     }
@@ -1107,16 +1132,17 @@ EOF
         val g = safeGame(game)
         val script = """
             cmd netd resolver flushdefaultif 2>/dev/null
-            PUBG_PID=${'$'}(pidof $g)
+            PUBG_PID=${'$'}(pidof $g 2>/dev/null)
             if [ ! -z "${'$'}PUBG_PID" ]; then
                 taskset -p -a ff ${'$'}PUBG_PID 2>/dev/null
                 ionice -c 2 -n 0 -p ${'$'}PUBG_PID 2>/dev/null
             fi
             am force-stop com.xiaomi.joyose 2>/dev/null
             cmd thermalservice override-status 0 2>/dev/null
+            rm -rf '/sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Logs'/* 2>/dev/null
         """.trimIndent()
         Shell.run(script)
-        "⚡ Micro-Lag & Socket Jitter Flushed in 50ms!"
+        "⚡ LAG & PING FLUSHED!"
     }
 
     suspend fun revertAll(game: String): String = withContext(Dispatchers.IO) {

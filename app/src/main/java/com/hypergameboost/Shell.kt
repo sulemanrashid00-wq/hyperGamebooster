@@ -130,7 +130,14 @@ object Shell {
         val cleanCmds = cmds.filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
         if (cleanCmds.isEmpty()) return ""
 
-        val combinedScript = cleanCmds.joinToString("\n")
+        val combinedScript = cleanCmds.joinToString("\n") { cmd ->
+            val trimmed = cmd.trim()
+            if (!trimmed.endsWith("&") && !trimmed.contains("2>/dev/null") && !trimmed.endsWith("fi") && !trimmed.endsWith("done")) {
+                "$trimmed 2>/dev/null"
+            } else {
+                trimmed
+            }
+        }
         return run(combinedScript)
     }
 

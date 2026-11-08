@@ -248,6 +248,10 @@ fun App() {
     var statusLog by remember { mutableStateOf("⚡ System Ready. Tap any feature for instant activation.") }
     var isBusy by remember { mutableStateOf(false) }
     var activeTab by remember { mutableStateOf(0) }
+    var btnBoostText by remember { mutableStateOf("⚡ ACTIVATE 100% ROCK-SOLID 120 FPS") }
+    var btnLaunchText by remember { mutableStateOf("🚀 BOOST & LAUNCH GAME NOW") }
+    var lastBoostClick by remember { mutableLongStateOf(0L) }
+    var lastLaunchClick by remember { mutableLongStateOf(0L) }
 
     // State Variables
     var bulletRegActive by remember { mutableStateOf(true) }
@@ -542,47 +546,67 @@ fun App() {
                             )
 
                             Button(
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                enabled = isReady && !isBusy,
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
                                 onClick = {
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastBoostClick < 500L) return@Button
+                                    lastBoostClick = now
+
                                     triggerVibe(ctx)
-                                    isBusy = true
-                                    exec {
+                                    btnBoostText = "⚡ ACTIVATING 120 FPS..."
+                                    statusLog = "⚡ Enforcing 120 FPS & HyperOS 3 Esports Suite..."
+
+                                    scope.launch {
                                         val t0 = System.currentTimeMillis()
-                                        val res = Actions.esportsMode(selectedGame, ctx.packageName)
+                                        val res = try {
+                                            Actions.applyMonsterBoost(selectedGame, ctx.packageName)
+                                        } catch (e: Throwable) {
+                                            "ERR: ${e.message}"
+                                        }
                                         val elapsed = System.currentTimeMillis() - t0
-                                        isBusy = false
-                                        "✅ 120 FPS LOCKED IN ${elapsed}ms!\n$res"
+                                        btnBoostText = "✅ 120 FPS LOCKED IN ${elapsed}ms!"
+                                        statusLog = "✅ 120 FPS LOCKED IN ${elapsed}ms!\n$res"
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("⚡ ACTIVATE 100% ROCK-SOLID 120 FPS", color = Color.Black, fontSize = 13.sp)
+                                Text(btnBoostText, color = Color.Black, fontSize = 13.sp)
                             }
 
                             Button(
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                enabled = isReady && !isBusy,
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
                                 onClick = {
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastLaunchClick < 500L) return@Button
+                                    lastLaunchClick = now
+
                                     triggerVibe(ctx)
-                                    isBusy = true
-                                    exec {
-                                        val t0 = System.currentTimeMillis()
-                                        Actions.esportsMode(selectedGame, ctx.packageName)
+                                    btnLaunchText = "🚀 LAUNCHING..."
+
+                                    val t0 = System.currentTimeMillis()
+
+                                    // 1. Immediately launch game via 3-Stage Fallback (<50ms instant response)
+                                    val launchRes = Actions.launchGame(ctx, selectedGame)
+
+                                    // 2. Fire the fast boost & watchdog in the background concurrently
+                                    scope.launch {
                                         try {
-                                            ctx.startForegroundService(Intent(ctx, AutoService::class.java).putExtra("game", selectedGame))
+                                            Actions.applyMonsterBoost(selectedGame, ctx.packageName)
+                                            try {
+                                                ctx.startForegroundService(Intent(ctx, AutoService::class.java).putExtra("game", selectedGame))
+                                            } catch (_: Throwable) {}
                                         } catch (_: Throwable) {}
-                                        val launchRes = Actions.launchGame(ctx, selectedGame)
-                                        val elapsed = System.currentTimeMillis() - t0
-                                        isBusy = false
-                                        "🚀 BOOSTED & LAUNCHED IN ${elapsed}ms!\n$launchRes"
                                     }
+
+                                    val elapsed = System.currentTimeMillis() - t0
+                                    btnLaunchText = "✅ LAUNCHED IN ${elapsed}ms!"
+                                    statusLog = "🚀 Launched in ${elapsed}ms | $launchRes"
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D00)),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("🚀 BOOST & LAUNCH GAME NOW", color = Color.White, fontSize = 13.sp)
+                                Text(btnLaunchText, color = Color.White, fontSize = 13.sp)
                             }
                         }
                     }

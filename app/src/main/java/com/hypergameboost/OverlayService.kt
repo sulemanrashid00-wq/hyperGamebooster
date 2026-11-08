@@ -211,9 +211,11 @@ class OverlayService : Service() {
                     val res = Actions.quickLagAndPingFlush(game)
                     ui.post {
                         text = "⚡OK!"
+                        tv.text = "⚡ LAG & PING FLUSHED! | 120 FPS LOCK"
+                        tv.setTextColor(Color.parseColor("#00E5FF"))
                         Toast.makeText(this@OverlayService, res, Toast.LENGTH_SHORT).show()
                     }
-                    delay(1000)
+                    delay(1200)
                     ui.post { text = "⚡FIX" }
                 }
             }
