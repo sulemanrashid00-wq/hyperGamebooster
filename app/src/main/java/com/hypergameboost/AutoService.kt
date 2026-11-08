@@ -124,6 +124,6 @@ class AutoService : Service() {
 
     companion object {
         const val EXTRA_GAME = "game"
-        private const val CHANNEL = "auto_watchdog_v4"
+        private const val CHANNEL = "auto_watchdog_v5"
     }
 }

@@ -335,7 +335,7 @@ fun App() {
                     color = Color(0xFF00E676)
                 )
                 Text(
-                    "v4.0 GOD-TIER",
+                    "v5.0 STABLE GOD-TIER",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF00E5FF)
                 )
@@ -485,7 +485,7 @@ fun App() {
                             onClick = {
                                 exec {
                                     val r = Actions.esportsMode(selectedGame, ctx.packageName)
-                                    val l = Actions.launch(selectedGame)
+                                    val l = Actions.launchGame(ctx, selectedGame)
                                     "$r\n$l"
                                 }
                             },

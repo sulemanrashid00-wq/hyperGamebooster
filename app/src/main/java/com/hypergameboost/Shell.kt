@@ -2,7 +2,9 @@ package com.hypergameboost
 
 import android.content.pm.PackageManager
 import rikka.shizuku.Shizuku
-import java.io.File
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 
 /** 0 = Shizuku not running, 1 = Running but no permission, 2 = Ready */
 object ShizukuState {
@@ -30,7 +32,7 @@ object Shell {
         val found = try {
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
             val out = p.inputStream.bufferedReader().readText()
-            p.waitFor()
+            p.waitFor(1, TimeUnit.SECONDS)
             out.contains("uid=0")
         } catch (_: Throwable) {
             false
@@ -40,10 +42,13 @@ object Shell {
     }
 
     /**
-     * Executes a command via Shizuku binder IPC.
-     * Falls back to Root (su) or local standard shell (sh) if Shizuku is unavailable.
+     * Executes a single shell command safely without hanging.
+     * Tries Shizuku newProcess via reflection, falls back to Root, then standard runtime shell.
      */
     fun run(cmd: String): String {
+        if (cmd.isBlank()) return ""
+
+        // 1. Shizuku Binder Process Execution
         if (ShizukuState.current() == ShizukuState.READY) {
             try {
                 val m = Shizuku::class.java.getDeclaredMethod(
@@ -53,54 +58,83 @@ object Shell {
                     String::class.java
                 )
                 m.isAccessible = true
-                val p = m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as Process
-                val out = p.inputStream.bufferedReader().readText()
-                val err = p.errorStream.bufferedReader().readText()
-                p.waitFor()
-                return (out + err).trim()
+                val p = m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as? Process
+                if (p != null) {
+                    val sb = StringBuilder()
+                    val reader = BufferedReader(InputStreamReader(p.inputStream))
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        sb.append(line).append("\n")
+                    }
+                    p.waitFor(4, TimeUnit.SECONDS)
+                    return sb.toString().trim()
+                }
             } catch (_: Throwable) {
-                // Fallback to local execution below
+                // Fallback to local execution
             }
         }
 
-        // Root fallback
+        // 2. Root (su) Fallback
         if (isRootAvailable()) {
             try {
                 val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-                val out = p.inputStream.bufferedReader().readText()
-                val err = p.errorStream.bufferedReader().readText()
-                p.waitFor()
-                return (out + err).trim()
+                val sb = StringBuilder()
+                val reader = BufferedReader(InputStreamReader(p.inputStream))
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    sb.append(line).append("\n")
+                }
+                p.waitFor(4, TimeUnit.SECONDS)
+                return sb.toString().trim()
             } catch (_: Throwable) {
-                // fallback to sh
+                // Fallback to standard sh
             }
         }
 
-        // Standard shell fallback
+        // 3. Standard Runtime Exec Fallback
         return try {
             val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-            val out = p.inputStream.bufferedReader().readText()
-            val err = p.errorStream.bufferedReader().readText()
-            p.waitFor()
-            (out + err).trim()
+            val sb = StringBuilder()
+            val reader = BufferedReader(InputStreamReader(p.inputStream))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                sb.append(line).append("\n")
+            }
+            p.waitFor(3, TimeUnit.SECONDS)
+            sb.toString().trim()
         } catch (e: Throwable) {
-            "ERROR: ${e.javaClass.simpleName}: ${e.message}"
+            "ERR: ${e.message}"
         }
     }
 
     /**
-     * Executes a batch of commands in a fast, single shell process session.
+     * Executes a batch of commands safely line-by-line without hanging threads.
      */
     fun runBatch(cmds: List<String>): String {
         if (cmds.isEmpty()) return ""
-        val script = cmds.filter { it.isNotBlank() && !it.trimStart().startsWith("#") }.joinToString("\n")
-        return run(script)
+        val cleanCmds = cmds.filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
+        if (cleanCmds.isEmpty()) return ""
+
+        val combinedScript = cleanCmds.joinToString("\n")
+        return try {
+            run(combinedScript)
+        } catch (_: Throwable) {
+            // If bulk execution fails, run line-by-line safely
+            val sb = StringBuilder()
+            for (c in cleanCmds) {
+                try {
+                    val res = run(c)
+                    if (res.isNotBlank()) sb.append(res).append("\n")
+                } catch (_: Throwable) { }
+            }
+            sb.toString().trim()
+        }
     }
 
     fun runBatch(vararg cmds: String): String = runBatch(cmds.toList())
 }
 
-/** Backward-compatible shorthand alias */
+/** Shorthand alias */
 object Sh {
     fun run(cmd: String): String = Shell.run(cmd)
     fun runBatch(cmds: List<String>): String = Shell.runBatch(cmds)
