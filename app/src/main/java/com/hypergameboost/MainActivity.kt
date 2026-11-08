@@ -126,7 +126,7 @@ fun TouchSamplingPad() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(160.dp)
             .background(Color(0xFF102027))
             .pointerInteropFilter { ev ->
                 val nanos = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
@@ -178,20 +178,68 @@ fun App() {
     var isBusy by remember { mutableStateOf(false) }
     var activeTab by remember { mutableStateOf(0) }
 
-    // GFX State
+    // PGT+ v0.25.9 State
     var pgtRes by remember { mutableStateOf("1280x720") }
     var pgtQual by remember { mutableStateOf("Smooth") }
     var pgtFps by remember { mutableStateOf(120) }
-    var pgtVulkan by remember { mutableStateOf(true) }
-    var pgtZeroLag by remember { mutableStateOf(true) }
-    var pgtPotato by remember { mutableStateOf(false) }
+    var pgtPotatoLevel by remember { mutableStateOf("Off") }
+    var pgtSimpleShader by remember { mutableStateOf(false) }
+    var pgtShadow by remember { mutableStateOf(false) }
+    var pgtMsaa by remember { mutableStateOf(false) }
+    var pgtSoundQual by remember { mutableStateOf("Ultra") }
+    var pgtGpuExt by remember { mutableStateOf("Apply All") }
+    var pgtSaveSens by remember { mutableStateOf(true) }
+
+    // Magnifier state
+    var zoomScale by remember { mutableStateOf(2.5f) }
+
+    // Motion Control state
+    var motionEnabled by remember { mutableStateOf(false) }
+    var motionLeftX by remember { mutableStateOf("300") }
+    var motionLeftY by remember { mutableStateOf("800") }
+    var motionRightX by remember { mutableStateOf("1800") }
+    var motionRightY by remember { mutableStateOf("800") }
+
+    // Rapid Fire Macro state
+    var rfX by remember { mutableStateOf("1800") }
+    var rfY by remember { mutableStateOf("600") }
 
     // HUD Service states
     var hudActive by remember { mutableStateOf(false) }
     var toolsActive by remember { mutableStateOf(false) }
-    var crosshairStyle by remember { mutableStateOf(0) }
     var auxLineActive by remember { mutableStateOf(false) }
     var fireRingActive by remember { mutableStateOf(false) }
+
+    // Crosshair customizer state
+    var crosshairStyleState by remember { mutableStateOf(CrosshairSettings.style) }
+    var crosshairOffsetX by remember { mutableStateOf(CrosshairSettings.offsetX.toFloat()) }
+    var crosshairOffsetY by remember { mutableStateOf(CrosshairSettings.offsetY.toFloat()) }
+    var crosshairSize by remember { mutableStateOf(CrosshairSettings.sizePx.toFloat()) }
+    var crosshairColor by remember { mutableStateOf(CrosshairSettings.colorHex) }
+
+    // Floating App selection
+    var miniAppPkg by remember { mutableStateOf("com.whatsapp") }
+
+    val sp = remember { ctx.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE) }
+
+    fun loadProfileForGame(game: String) {
+        pgtFps = sp.getInt("fps_$game", 120)
+        pgtRes = sp.getString("res_$game", "1280x720") ?: "1280x720"
+        pgtQual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
+        pgtPotatoLevel = sp.getString("potato_$game", "Off") ?: "Off"
+        zoomScale = sp.getFloat("zoom_$game", 2.5f)
+        CrosshairSettings.magnifierScale = zoomScale
+    }
+
+    fun saveProfileForGame(game: String) {
+        sp.edit()
+            .putInt("fps_$game", pgtFps)
+            .putString("res_$game", pgtRes)
+            .putString("qual_$game", pgtQual)
+            .putString("potato_$game", pgtPotatoLevel)
+            .putFloat("zoom_$game", zoomScale)
+            .apply()
+    }
 
     DisposableEffect(Unit) {
         val permListener = Shizuku.OnRequestPermissionResultListener { _, _ -> shizukuState = ShizukuState.current() }
@@ -210,7 +258,10 @@ fun App() {
     LaunchedEffect(shizukuState) {
         if (shizukuState == ShizukuState.READY) {
             installedGamesList = Actions.installedGames()
-            installedGamesList.firstOrNull()?.let { selectedGame = it }
+            installedGamesList.firstOrNull()?.let {
+                selectedGame = it
+                loadProfileForGame(it)
+            }
         }
     }
 
@@ -233,7 +284,7 @@ fun App() {
             statusLog = "Overlay permission required. Tap 'Grant Overlay Permission' first."
             hudActive = false
             toolsActive = false
-            crosshairStyle = 0
+            crosshairStyleState = 0
             auxLineActive = false
             fireRingActive = false
             return
@@ -242,7 +293,7 @@ fun App() {
             putExtra(OverlayService.EXTRA_GAME, selectedGame)
             putExtra(OverlayService.EXTRA_HUD, hudActive)
             putExtra(OverlayService.EXTRA_TOOLS, toolsActive)
-            putExtra(OverlayService.EXTRA_CROSSHAIR, crosshairStyle)
+            putExtra(OverlayService.EXTRA_CROSSHAIR, crosshairStyleState)
             putExtra(OverlayService.EXTRA_AUX_LINE, auxLineActive)
             putExtra(OverlayService.EXTRA_FIRE_RING, fireRingActive)
         }
@@ -271,7 +322,7 @@ fun App() {
                     color = Color(0xFF00E676)
                 )
                 Text(
-                    "v2.0 ESPORTS",
+                    "v3.0 ULTIMATE",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF00E5FF)
                 )
@@ -302,7 +353,7 @@ fun App() {
                     }
                 }
                 else -> {
-                    Text("✓ Shizuku UID 2000 Ready | HyperOS 3 Optimized", color = Color(0xFF00E676), fontSize = 12.sp)
+                    Text("✓ Shizuku UID 2000 Ready | HyperOS 3 Snapdragon", color = Color(0xFF00E676), fontSize = 12.sp)
                 }
             }
 
@@ -315,7 +366,10 @@ fun App() {
                 displayGames.forEach { pkg ->
                     FilterChip(
                         selected = selectedGame == pkg,
-                        onClick = { selectedGame = pkg },
+                        onClick = {
+                            selectedGame = pkg
+                            loadProfileForGame(pkg)
+                        },
                         label = { Text(Games.known[pkg] ?: pkg, fontSize = 12.sp) }
                     )
                 }
@@ -347,7 +401,7 @@ fun App() {
         ) {
             when (activeTab) {
                 // =============================================================
-                // TAB 1: BOOST (Esports 1-Tap, Watchdog, Diablo, WildBoost)
+                // TAB 1: BOOST (Esports 1-Tap, Watchdog, Bypass Charging)
                 // =============================================================
                 0 -> {
                     SectionCard("🔥 ESPORTS 1-TAP ACTIVATION", "Enforces all 16 optimization modules in a single batch") {
@@ -375,10 +429,20 @@ fun App() {
                         }
                     }
 
-                    SectionCard("HyperOS 3 & Joyose Watchdog", "60s cycle kills Joyose, re-applies thermal 0 & pins PID") {
+                    SectionCard("Bypass Charging & Thermal Protection", "Stop battery heating while playing plugged-in") {
                         ToggleRow(
-                            label = "Joyose 60-Second Watchdog (AutoService)",
-                            subtitle = "Prevents mid-match throttling in competitive scrims",
+                            label = "🔌 Toggle Bypass Charging / Stop Heat Charging",
+                            subtitle = "Writes to input_suspend / night_charging & disables charge boost",
+                            enabled = isReady,
+                            onAction = { exec { Actions.setBypassCharging(true) } },
+                            offAction = { exec { Actions.setBypassCharging(false) } }
+                        )
+                    }
+
+                    SectionCard("Smart Watchdog & Auto-Profile", "PID tracking: auto-boost on launch, auto-revert on close") {
+                        ToggleRow(
+                            label = "Joyose Smart Watchdog (AutoService)",
+                            subtitle = "Auto-applies saved profile when game opens, 60s Joyose kill loop",
                             enabled = isReady,
                             onAction = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -387,7 +451,7 @@ fun App() {
                                 ctx.startForegroundService(
                                     Intent(ctx, AutoService::class.java).putExtra(AutoService.EXTRA_GAME, selectedGame)
                                 )
-                                statusLog = "Watchdog Service STARTED for $selectedGame"
+                                statusLog = "Smart Auto-Watchdog STARTED for $selectedGame"
                             },
                             offAction = {
                                 ctx.stopService(Intent(ctx, AutoService::class.java))
@@ -396,7 +460,7 @@ fun App() {
                         )
                     }
 
-                    SectionCard("Flagship Performance Governors", "Bypass conservative OEM governors") {
+                    SectionCard("Flagship Performance Governors", "Bypass conservative OEM throttling") {
                         ToggleRow(
                             label = "Diablo / X-Mode Awakening",
                             subtitle = "Overrides thermalservice 0 & locks fixed performance mode",
@@ -464,16 +528,16 @@ fun App() {
                 }
 
                 // =============================================================
-                // TAB 2: GFX / RES (PGT+ Engine, Aspect Downscale, Visuals)
+                // TAB 2: GFX / RES (PGT+ v0.25.9 Complete, Sniper Zoom, Downscale)
                 // =============================================================
                 1 -> {
-                    SectionCard("PGT+ (v0.25.9) Graphics Engine", "Zero-conflict configuration builder") {
+                    SectionCard("PGT+ (v0.25.9) Config & Extension Injector", "Full interactive controls & sensitivity protection") {
                         Text("Resolution:", color = Color.White, fontSize = 12.sp)
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("800x600", "960x540", "1280x720", "1440x720", "1600x900", "1920x1080").forEach { r ->
+                            listOf("800x600", "960x540", "1280x720", "1440x720", "1600x900", "1920x1080", "2560x1440").forEach { r ->
                                 FilterChip(
                                     selected = pgtRes == r,
                                     onClick = { pgtRes = r },
@@ -482,12 +546,12 @@ fun App() {
                             }
                         }
 
-                        Text("Graphics Quality & FPS:", color = Color.White, fontSize = 12.sp)
+                        Text("Graphics Quality & Target FPS:", color = Color.White, fontSize = 12.sp)
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("Super Smooth", "Smooth", "Balanced", "HD").forEach { q ->
+                            listOf("Super Smooth", "Smooth", "Balanced", "HD", "HDR").forEach { q ->
                                 FilterChip(
                                     selected = pgtQual == q,
                                     onClick = { pgtQual = q },
@@ -505,88 +569,139 @@ fun App() {
                             }
                         }
 
+                        Text("Potato Graphics Level:", color = Color.White, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Off", "Low (LOD +1)", "Medium (LOD +2)", "Ultra (LOD +3)").forEach { p ->
+                                FilterChip(
+                                    selected = pgtPotatoLevel == p,
+                                    onClick = { pgtPotatoLevel = p },
+                                    label = { Text(p, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Vulkan Engine:", color = Color.White, fontSize = 12.sp)
-                            Switch(checked = pgtVulkan, onCheckedChange = { pgtVulkan = it })
+                            Text("Simple Shader (Dynamic Lighting off):", color = Color.White, fontSize = 12.sp)
+                            Switch(checked = pgtSimpleShader, onCheckedChange = { pgtSimpleShader = it })
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Zero Lag Profile (120 FPS Lock):", color = Color.White, fontSize = 12.sp)
-                            Switch(checked = pgtZeroLag, onCheckedChange = { pgtZeroLag = it })
+                            Text("Shadows:", color = Color.White, fontSize = 12.sp)
+                            Switch(checked = pgtShadow, onCheckedChange = { pgtShadow = it })
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Potato Graphics (Minimal Textures):", color = Color.White, fontSize = 12.sp)
-                            Switch(checked = pgtPotato, onCheckedChange = { pgtPotato = it })
+                            Text("MSAA Anti-Aliasing (4x):", color = Color.White, fontSize = 12.sp)
+                            Switch(checked = pgtMsaa, onCheckedChange = { pgtMsaa = it })
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Save Sensitivity Settings (Active.sav protect):", color = Color.White, fontSize = 12.sp)
+                            Switch(checked = pgtSaveSens, onCheckedChange = { pgtSaveSens = it })
+                        }
+
+                        Text("GPU Optimization Extensions:", color = Color.White, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Apply All", "Adreno (GL_AMD)", "ARM (GL_ARM)", "OES/EXT Compression", "Default").forEach { ext ->
+                                FilterChip(
+                                    selected = pgtGpuExt == ext,
+                                    onClick = { pgtGpuExt = ext },
+                                    label = { Text(ext, fontSize = 11.sp) }
+                                )
+                            }
                         }
 
                         Button(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = isReady && !isBusy,
                             onClick = {
+                                saveProfileForGame(selectedGame)
                                 exec {
                                     Actions.applyPgtGraphicsConfig(
                                         game = selectedGame,
                                         resolution = pgtRes,
                                         quality = pgtQual,
                                         fps = pgtFps,
-                                        vulkanRendering = pgtVulkan,
-                                        zeroLag = pgtZeroLag,
-                                        potatoGraphics = pgtPotato
+                                        potatoLevel = pgtPotatoLevel,
+                                        simpleShader = pgtSimpleShader,
+                                        shadowEnabled = pgtShadow,
+                                        msaaEnabled = pgtMsaa,
+                                        soundQuality = pgtSoundQual,
+                                        gpuExtension = pgtGpuExt,
+                                        saveSensitivity = pgtSaveSens
                                     )
                                 }
                             }
                         ) {
-                            Text("APPLY PGT+ GRAPHICS (CONFLICT-PROOFED)")
+                            Text("INJECT PGT+ CONFIG (ZERO-CONFLICT)")
                         }
                     }
 
-                    SectionCard("Aspect-Ratio Hardware Downscaler", "Ban-safe hardware scaling for higher frame rates") {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SectionCard("RedMagic Sniper Magnifier (2x–4x Zoom)", "Hardware SurfaceFlinger window zoom for scouts") {
+                        Text("Magnifier Scale: ${"%.1f".format(zoomScale)}x", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = zoomScale,
+                            onValueChange = {
+                                zoomScale = it
+                                CrosshairSettings.magnifierScale = it
+                                saveProfileForGame(selectedGame)
+                            },
+                            valueRange = 2.0f..4.0f,
+                            steps = 3
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 modifier = Modifier.weight(1f),
                                 enabled = isReady,
-                                onClick = { exec { Actions.applyAspectPreset(1) } }
+                                onClick = { exec { Actions.setMagnifier(true, zoomScale) } }
                             ) {
+                                Text("Magnifier ON")
+                            }
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = { exec { Actions.setMagnifier(false) } }
+                            ) {
+                                Text("Magnifier OFF")
+                            }
+                        }
+                    }
+
+                    SectionCard("Aspect-Ratio Hardware Downscaler", "Ban-safe resolution scaling for competitive scrims") {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(1) } }) {
                                 Text("900p Pro", fontSize = 11.sp)
                             }
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.applyAspectPreset(2) } }
-                            ) {
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(2) } }) {
                                 Text("810p Scrim", fontSize = 11.sp)
                             }
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.applyAspectPreset(3) } }
-                            ) {
+                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(3) } }) {
                                 Text("720p Potato", fontSize = 11.sp)
                             }
                         }
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = isReady,
-                            onClick = { exec { Actions.applyAspectPreset(0) } }
-                        ) {
+                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(0) } }) {
                             Text("Reset Screen Resolution to Stock")
                         }
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = isReady,
-                            onClick = { exec { Actions.launchFreeformIpadView(selectedGame) } }
-                        ) {
+                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = isReady, onClick = { exec { Actions.launchFreeformIpadView(selectedGame) } }) {
                             Text("Launch Freeform iPad View Mode")
                         }
                     }
@@ -609,25 +724,17 @@ fun App() {
                                 Text("Red Enemy Boost")
                             }
                             OutlinedButton(onClick = { exec { Actions.applyCamperFilters("reset") } }) {
-                                Text("Reset Filters")
+                                Text("Reset")
                             }
                         }
                     }
 
                     SectionCard("UE4 Engine Maintenance", "Clean shader caches & pre-compile ART") {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.cleanUe4StutterLogs(selectedGame) } }
-                            ) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.cleanUe4StutterLogs(selectedGame) } }) {
                                 Text("Purge UE4 Logs", fontSize = 11.sp)
                             }
-                            OutlinedButton(
-                                modifier = Modifier.weight(1f),
-                                enabled = isReady,
-                                onClick = { exec { Actions.artSpeedCompile(selectedGame) } }
-                            ) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.artSpeedCompile(selectedGame) } }) {
                                 Text("ART Speed Compile", fontSize = 11.sp)
                             }
                         }
@@ -635,17 +742,94 @@ fun App() {
                 }
 
                 // =============================================================
-                // TAB 3: TOUCH / AUDIO (Impulse Touch, Test Pad, Footstep EQ)
+                // TAB 3: TOUCH / AUDIO (Impulse Touch, Motion Control, DMR Macro)
                 // =============================================================
                 2 -> {
                     SectionCard("Android 16 Raw 1:1 Impulse Touch", "Disables touch filtering delay & sets 0 slop") {
                         ToggleRow(
                             label = "Impulse Touch & HyperOS Touch IC",
-                            subtitle = "Sets gamemode_touch_follow_response 100, aim 90, stability 100",
+                            subtitle = "gamemode_touch_follow_response 100, aim 90, stability 100",
                             enabled = isReady,
                             onAction = { exec { Actions.applyImpulseTouchAndTouchIc(true) } },
                             offAction = { exec { Actions.applyImpulseTouchAndTouchIc(false) } }
                         )
+                    }
+
+                    SectionCard("iQOO 6-Axis Gyro Motion Control", "Tilt phone sharply to trigger on-screen taps") {
+                        ToggleRow(
+                            label = "Motion Control (Tilt-to-Tap)",
+                            subtitle = "Sharp tilt triggers Shizuku tap (Peek/Jump/Reload)",
+                            enabled = isReady,
+                            onAction = {
+                                motionEnabled = true
+                                val lx = motionLeftX.toIntOrNull() ?: 300
+                                val ly = motionLeftY.toIntOrNull() ?: 800
+                                val rx = motionRightX.toIntOrNull() ?: 1800
+                                val ry = motionRightY.toIntOrNull() ?: 800
+                                statusLog = NativeTools.setMotionControl(ctx, true, lx, ly, rx, ry)
+                            },
+                            offAction = {
+                                motionEnabled = false
+                                statusLog = NativeTools.setMotionControl(ctx, false, 0, 0, 0, 0)
+                            }
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                modifier = Modifier.weight(1f),
+                                value = motionLeftX,
+                                onValueChange = { motionLeftX = it },
+                                label = { Text("Left Tilt X") },
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                modifier = Modifier.weight(1f),
+                                value = motionLeftY,
+                                onValueChange = { motionLeftY = it },
+                                label = { Text("Left Tilt Y") },
+                                singleLine = true
+                            )
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                modifier = Modifier.weight(1f),
+                                value = motionRightX,
+                                onValueChange = { motionRightX = it },
+                                label = { Text("Right Tilt X") },
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                modifier = Modifier.weight(1f),
+                                value = motionRightY,
+                                onValueChange = { motionRightY = it },
+                                label = { Text("Right Tilt Y") },
+                                singleLine = true
+                            )
+                        }
+                    }
+
+                    SectionCard("ASUS ROG Rapid-Fire DMR Target Coordinates", "12 taps/sec auto-fire trigger") {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                modifier = Modifier.weight(1f),
+                                value = rfX,
+                                onValueChange = {
+                                    rfX = it
+                                    CrosshairSettings.rfTargetX = it.toIntOrNull() ?: 1800
+                                },
+                                label = { Text("Fire Button X") },
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                modifier = Modifier.weight(1f),
+                                value = rfY,
+                                onValueChange = {
+                                    rfY = it
+                                    CrosshairSettings.rfTargetY = it.toIntOrNull() ?: 600
+                                },
+                                label = { Text("Fire Button Y") },
+                                singleLine = true
+                            )
+                        }
                     }
 
                     SectionCard("Live Touch Polling Rate (Hz) Diagnostic Pad", "Hardware sampling diagnostic") {
@@ -690,10 +874,90 @@ fun App() {
                 }
 
                 // =============================================================
-                // TAB 4: HUD / NET (Draggable Overlays, Firewall, DNS, Panic)
+                // TAB 4: HUD / NET (Crosshairs, Floating App, Firewall, DNS)
                 // =============================================================
                 3 -> {
-                    SectionCard("Esports Overlays & HUD Suite", "Real-time in-game telemetry & tactical aids") {
+                    SectionCard("Crosshair X/Y Alignment & Customizer", "Pixel-perfect punch-hole centering") {
+                        Text("Style:", color = Color.White, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("OFF" to 0, "Dot" to 1, "Cross" to 2, "Circle" to 3).forEach { (name, style) ->
+                                FilterChip(
+                                    selected = crosshairStyleState == style,
+                                    onClick = {
+                                        crosshairStyleState = style
+                                        CrosshairSettings.style = style
+                                        updateOverlayService()
+                                    },
+                                    label = { Text(name, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        Text("X Offset: ${crosshairOffsetX.toInt()} px", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = crosshairOffsetX,
+                            onValueChange = {
+                                crosshairOffsetX = it
+                                CrosshairSettings.offsetX = it.toInt()
+                                updateOverlayService()
+                            },
+                            valueRange = -30f..30f,
+                            steps = 60
+                        )
+
+                        Text("Y Offset: ${crosshairOffsetY.toInt()} px", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = crosshairOffsetY,
+                            onValueChange = {
+                                crosshairOffsetY = it
+                                CrosshairSettings.offsetY = it.toInt()
+                                updateOverlayService()
+                            },
+                            valueRange = -30f..30f,
+                            steps = 60
+                        )
+
+                        Text("Size: ${crosshairSize.toInt()} px", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = crosshairSize,
+                            onValueChange = {
+                                crosshairSize = it
+                                CrosshairSettings.sizePx = it.toInt()
+                                updateOverlayService()
+                            },
+                            valueRange = 10f..50f,
+                            steps = 40
+                        )
+
+                        Text("RGB Color:", color = Color.White, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                "Neon Green" to "#00FF66",
+                                "Cyan" to "#00E5FF",
+                                "Red" to "#FF1744",
+                                "Yellow" to "#FFEA00",
+                                "White" to "#FFFFFF"
+                            ).forEach { (name, hex) ->
+                                FilterChip(
+                                    selected = crosshairColor == hex,
+                                    onClick = {
+                                        crosshairColor = hex
+                                        CrosshairSettings.colorHex = hex
+                                        updateOverlayService()
+                                    },
+                                    label = { Text(name, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+                    }
+
+                    SectionCard("Esports Overlays & Tactical Tools", "In-game telemetry & helper floating tools") {
                         OutlinedButton(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -709,7 +973,7 @@ fun App() {
                         }
 
                         ToggleRow(
-                            label = "Draggable Telemetry HUD (FPS, Ping, Temp, GPU)",
+                            label = "Draggable Telemetry HUD (FPS, 1%L, Ping, Watts, Radar)",
                             enabled = true,
                             onAction = { hudActive = true; updateOverlayService() },
                             offAction = { hudActive = false; updateOverlayService() }
@@ -733,35 +997,24 @@ fun App() {
                             offAction = { fireRingActive = false; updateOverlayService() }
                         )
 
-                        Text("Esports Custom Crosshair:", color = Color.White, fontSize = 12.sp)
+                        Text("In-Game Floating Mini-App:", color = Color.White, fontSize = 12.sp)
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("OFF" to 0, "Dot" to 1, "Cross" to 2, "Circle" to 3).forEach { (name, style) ->
+                            listOf(
+                                "WhatsApp" to "com.whatsapp",
+                                "Chrome" to "com.android.chrome",
+                                "Browser" to "com.mi.globalbrowser"
+                            ).forEach { (name, pkg) ->
                                 FilterChip(
-                                    selected = crosshairStyle == style,
+                                    selected = miniAppPkg == pkg,
                                     onClick = {
-                                        crosshairStyle = style
-                                        updateOverlayService()
+                                        miniAppPkg = pkg
+                                        CrosshairSettings.floatingAppPkg = pkg
                                     },
                                     label = { Text(name, fontSize = 11.sp) }
                                 )
-                            }
-                        }
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    ctx.startForegroundService(
-                                        Intent(ctx, LobbyTimerService::class.java)
-                                            .putExtra(LobbyTimerService.EXTRA_GAME, selectedGame)
-                                            .putExtra(LobbyTimerService.EXTRA_SECONDS, 45)
-                                    )
-                                }
-                            ) {
-                                Text("45s Flash Return", fontSize = 11.sp)
                             }
                         }
                     }

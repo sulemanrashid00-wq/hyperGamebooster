@@ -18,15 +18,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * AutoService - HyperOS 3 Game Space & Joyose 60-Second Watchdog (Section 2 & 5)
- * - Automatically detects PUBG / BGMI foreground state
- * - Activates 120 FPS Esports Engine & WildBoost 3.0
- * - 60-Second Watchdog Loop:
- *   1. Restricts PowerKeeper & MIUI Daemon
- *   2. Kills com.xiaomi.joyose to prevent mid-match HyperOS thermal lock
- *   3. Re-applies thermal override status 0
- *   4. Pins game PID to Prime CPU cores (taskset ff) & Real-time I/O (ionice -c 2 -n 0)
- * - Restores default system governor when game closes
+ * AutoService - HyperOS 3 Smart Auto-Profile & 60s Watchdog Engine (v3.0 Ultimate)
+ * 1. Automatically detects game start via PID transition (`pidof $game`)
+ * 2. Instantly loads and applies per-game saved profile (FPS, Downscale, Touch IC, Saturation, Prime Pinning)
+ * 3. 60-Second Watchdog Loop: kills Joyose, re-enforces thermal status 0, pins PID via taskset ff
+ * 4. The moment game closes (PID becomes empty), automatically reverts 100% to stock settings
  */
 class AutoService : Service() {
     private var job: Job? = null
@@ -38,8 +34,8 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster Watchdog Active")
-            .setContentText("Monitoring $game & HyperOS 3 Engine")
+            .setContentTitle("HyperGameBooster Smart Watchdog")
+            .setContentText("Monitoring $game (Auto-Boost & Auto-Restore Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -52,67 +48,62 @@ class AutoService : Service() {
 
         job?.cancel()
         job = CoroutineScope(Dispatchers.IO).launch {
-            // Apply initial Joyose and Powerkeeper restrictions
             Actions.restrictPowerKeeperAndJoyose()
-            runWatchdog(game)
+            runSmartWatchdog(game)
         }
         return START_NOT_STICKY
     }
 
-    private suspend fun runWatchdog(game: String) {
-        var isGameActive = false
-        var consecutiveMissing = 0
+    private suspend fun runSmartWatchdog(game: String) {
+        var wasGameRunning = false
         var watchdogTimer = 0L
 
         while (currentCoroutineContext().isActive) {
-            val topActivity = Sh.run("dumpsys activity activities | grep -m 3 -E 'topResumedActivity|mResumedActivity'")
-            val inGame = topActivity.contains(game)
+            val pidOut = Sh.run("pidof $game").trim()
+            val isGameRunning = pidOut.isNotEmpty() && pidOut.split(Regex("\\s+")).any { it.all(Char::isDigit) }
 
-            if (inGame) {
-                consecutiveMissing = 0
-                if (!isGameActive) {
-                    isGameActive = true
-                    // Activate full Esports Engine + WildBoost + FEAS
+            if (isGameRunning) {
+                if (!wasGameRunning) {
+                    wasGameRunning = true
+
+                    // 1. Activate Full Esports Mode
                     Actions.esportsMode(game, packageName)
                     NativeTools.startAdpfSession(this@AutoService, 8333333L)
                     NativeTools.setWifiLowLatency(this@AutoService, true)
 
-                    // Pin CPU and enforce thermal immediately
-                    Actions.pinGameProcess(game)
+                    // 2. Read Per-Game SharedPreferences & apply customized profile
+                    val sp = getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE)
+                    val ds = sp.getString("ds_$game", "0.75") ?: "0.75"
+                    val fps = sp.getInt("fps_$game", 120)
+                    val satMode = sp.getString("sat_$game", "eagle_eye") ?: "eagle_eye"
+                    val bypassCharge = sp.getBoolean("bypass_$game", false)
 
-                    // Check user per-game custom preferences
-                    val sp = getSharedPreferences("hgb", Context.MODE_PRIVATE)
-                    val ds = sp.getString("ds_$game", null)
-                    val fps = sp.getInt("fps_$game", 0)
-                    if (ds != null && fps != 0) {
-                        Actions.applyDownscaleAndFps(game, ds, fps)
+                    Actions.applyDownscaleAndFps(game, ds, fps)
+                    Actions.applyCamperFilters(satMode)
+                    if (bypassCharge) {
+                        Actions.setBypassCharging(true)
                     }
-                    val res = sp.getInt("res_$game", 0)
-                    if (res in 55..99) {
-                        Actions.setResolution(res)
-                    }
+
+                    // 3. Pin process to Prime CPU cores immediately
+                    Actions.pinGameProcess(game)
                 }
 
-                // 60-Second Watchdog Loop execution
+                // 60-Second Watchdog Tick
                 val now = System.currentTimeMillis()
                 if (now - watchdogTimer >= 60_000L) {
                     watchdogTimer = now
                     Actions.watchdogTick(game)
                     NativeTools.reportAdpfWork(8000000L)
                 }
-            } else if (isGameActive) {
-                consecutiveMissing++
-                // If game is not in foreground for 3 consecutive checks (~15-18 seconds)
-                if (consecutiveMissing >= 3) {
-                    Actions.revertAll(game)
-                    NativeTools.stopAdpfSession()
-                    NativeTools.setWifiLowLatency(this@AutoService, false)
-                    isGameActive = false
-                    consecutiveMissing = 0
-                }
+            } else if (wasGameRunning) {
+                // Game closed! Restore stock settings automatically
+                Actions.revertAll(game)
+                NativeTools.stopAdpfSession()
+                NativeTools.setWifiLowLatency(this@AutoService, false)
+                wasGameRunning = false
             }
 
-            delay(if (isGameActive) 6000L else 4000L)
+            delay(if (wasGameRunning) 5000L else 3000L)
         }
     }
 
@@ -123,6 +114,6 @@ class AutoService : Service() {
 
     companion object {
         const val EXTRA_GAME = "game"
-        private const val CHANNEL = "auto_watchdog_channel"
+        private const val CHANNEL = "auto_watchdog_v3"
     }
 }

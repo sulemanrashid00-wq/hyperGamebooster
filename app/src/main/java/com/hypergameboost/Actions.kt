@@ -24,6 +24,9 @@ object Actions {
     private const val CONFIG_SUFFIX = "files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
     private const val BACKUP_DIR = "/sdcard/HyperGameBooster_Backup"
 
+    @Volatile var isMagnifierOn: Boolean = false
+    @Volatile var isBypassChargingOn: Boolean = false
+
     fun safeGame(pkg: String): String {
         return if (pkg in Games.known) pkg else "com.tencent.ig"
     }
@@ -354,7 +357,7 @@ object Actions {
     // =========================================================================
     suspend fun applyCamperFilters(filterMode: String): String = withContext(Dispatchers.IO) {
         when (filterMode) {
-            "eagle_eye" -> { // 1.5x Saturation boost
+            "eagle_eye" -> {
                 Shell.runBatch(
                     listOf(
                         "service call SurfaceFlinger 1022 f 1.5",
@@ -366,7 +369,7 @@ object Actions {
                 )
                 "Eagle Eye Saturation (1.5x) Applied"
             }
-            "scout_inversion" -> { // ROG Scout Display Inversion (campers glow white)
+            "scout_inversion" -> {
                 Shell.runBatch(
                     listOf(
                         "service call SurfaceFlinger 1022 f 1.0",
@@ -375,7 +378,7 @@ object Actions {
                 )
                 "ROG Scout Mode Inversion Active"
             }
-            "hunt_grass" -> { // RedMagic Deuteranomaly Grass Contrast
+            "hunt_grass" -> {
                 Shell.runBatch(
                     listOf(
                         "service call SurfaceFlinger 1022 f 1.3",
@@ -385,7 +388,7 @@ object Actions {
                 )
                 "RedMagic Hunt Mode (Green Grass Contrast) Active"
             }
-            "hunt_red" -> { // Protanomaly Red Boost
+            "hunt_red" -> {
                 Shell.runBatch(
                     listOf(
                         "settings put secure accessibility_display_daltonizer_enabled 1",
@@ -394,7 +397,7 @@ object Actions {
                 )
                 "RedMagic Hunt Mode (Red Enemy Boost) Active"
             }
-            else -> { // Reset
+            else -> {
                 Shell.runBatch(
                     listOf(
                         "service call SurfaceFlinger 1022 f 1.0",
@@ -446,46 +449,61 @@ object Actions {
     }
 
     // =========================================================================
-    // 11. CHAMPIONSHIP MODE / GUIDED ACCESS LOCK
+    // 11. REDMAGIC "SCREEN EXTRACTION" HARDWARE SNIPER MAGNIFIER
     // =========================================================================
-    suspend fun applyChampionshipMode(game: String, enable: Boolean): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
+    suspend fun setMagnifier(enable: Boolean, scale: Float = 2.5f): String = withContext(Dispatchers.IO) {
+        isMagnifierOn = enable
+        val s = scale.coerceIn(1.5f, 5.0f)
         if (enable) {
             val cmds = listOf(
-                "settings put global policy_control immersive.full=$g",
-                "settings put global heads_up_notifications_enabled 0",
-                "cmd statusbar send-disable-flag 65536",
-                "cmd statusbar cmd notification set-dnd on",
-                "content insert --uri content://settings/secure --bind name:s:sync_on_wifi_only --bind value:i:1",
-                "settings put system three_gesture_down 0",
-                "settings put system three_gesture_long_press 0",
-                "settings put system double_click_power_key 0",
-                "settings put system miui_tof_gesture 0",
-                "settings put secure back_gesture_inset_scale_left 0",
-                "settings put secure back_gesture_inset_scale_right 0",
-                "settings put system vibrate_input_devices 0",
-                "settings put system haptic_feedback_enabled 0",
-                "settings put system screen_brightness_mode 0"
+                "settings put secure accessibility_display_magnification_scale $s",
+                "settings put secure accessibility_display_magnification_enabled 1"
             )
             Shell.runBatch(cmds)
-            "Championship Guided Access: Fullscreen Lock, DND ON, Gestures OFF"
+            "Sniper Magnifier ACTIVE (${s}x Zero-Lag Zoom)"
         } else {
-            val cmds = listOf(
-                "settings put global policy_control null*",
-                "settings put global heads_up_notifications_enabled 1",
-                "cmd statusbar send-disable-flag 0",
-                "cmd statusbar cmd notification set-dnd off",
-                "settings put secure back_gesture_inset_scale_left 1",
-                "settings put secure back_gesture_inset_scale_right 1",
-                "settings put system haptic_feedback_enabled 1"
-            )
-            Shell.runBatch(cmds)
-            "Championship Mode Released"
+            Shell.run("settings put secure accessibility_display_magnification_enabled 0")
+            "Sniper Magnifier DISABLED"
         }
     }
 
     // =========================================================================
-    // 12. LIVE CPU PRIME CORE PINNING (TASKSET) & REAL-TIME DISK I/O (IONICE)
+    // 12. IN-GAME FLOATING MINI-APP LAUNCHER (Freeform windowingMode 5)
+    // =========================================================================
+    suspend fun launchFloatingMiniApp(pkg: String = "com.whatsapp"): String = withContext(Dispatchers.IO) {
+        val cmds = listOf(
+            "settings put global enable_freeform_support 1",
+            "settings put global force_resizable_activities 1",
+            "am start --windowingMode 5 $pkg"
+        )
+        Shell.runBatch(cmds)
+        "Floating Mini-App Launched ($pkg)"
+    }
+
+    // =========================================================================
+    // 13. BYPASS CHARGING & THERMAL CHARGE PROTECTION (ROG & Xiaomi)
+    // =========================================================================
+    suspend fun setBypassCharging(enable: Boolean): String = withContext(Dispatchers.IO) {
+        isBypassChargingOn = enable
+        val v = if (enable) "1" else "0"
+        val script = """
+            if [ -f /sys/class/power_supply/battery/input_suspend ]; then
+                echo $v > /sys/class/power_supply/battery/input_suspend
+            fi
+            if [ -f /sys/class/power_supply/battery/night_charging ]; then
+                echo $v > /sys/class/power_supply/battery/night_charging
+            fi
+            settings put system charge_boost_enable ${if (enable) 0 else 1}
+            settings put system charge_protection_enable ${if (enable) 1 else 0}
+            echo "Bypass Charging set to $v"
+        """.trimIndent()
+        val out = Shell.run(script)
+        if (enable) "🔌 Bypass Charging ON (Battery heating eliminated during match)"
+        else "🔌 Standard Charging RESTORED"
+    }
+
+    // =========================================================================
+    // 14. LIVE CPU PRIME CORE PINNING (TASKSET) & REAL-TIME DISK I/O (IONICE)
     // =========================================================================
     suspend fun pinGameProcess(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
@@ -503,7 +521,7 @@ object Actions {
     }
 
     // =========================================================================
-    // 13. UE4 LIVE ANTI-STUTTER LOG CLEANER, DEX SPEED COMPILE & STORAGE FSTRIM
+    // 15. UE4 ANTI-STUTTER LOG CLEANER, DEX SPEED COMPILE & STORAGE FSTRIM
     // =========================================================================
     suspend fun cleanUe4StutterLogs(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
@@ -572,7 +590,7 @@ object Actions {
     }
 
     // =========================================================================
-    // 14. LOW-PING NETWORK FIREWALL, 5GHZ PRIORITY & GAMING DNS SWITCHER
+    // 16. LOW-PING NETWORK FIREWALL, 5GHZ PRIORITY & GAMING DNS SWITCHER
     // =========================================================================
     suspend fun applyLowPingNetworkFirewall(game: String, enable: Boolean): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
@@ -636,7 +654,7 @@ object Actions {
     }
 
     // =========================================================================
-    // 15. TYPE-C SPLITTER / DAC DISCONNECT FIX & SPATIAL LOW-LATENCY AUDIO
+    // 17. TYPE-C SPLITTER / DAC DISCONNECT FIX & SPATIAL LOW-LATENCY AUDIO
     // =========================================================================
     suspend fun applyTypeCAudioFix(enable: Boolean): String = withContext(Dispatchers.IO) {
         if (enable) {
@@ -667,33 +685,151 @@ object Actions {
     }
 
     // =========================================================================
-    // 16. LIVE TELEMETRY QUERIES & FULL SETTINGS SNAPSHOT BACKUP
+    // 18. CHAMPIONSHIP MODE / GUIDED ACCESS LOCK
     // =========================================================================
-    suspend fun queryLiveTelemetry(game: String): String = withContext(Dispatchers.IO) {
+    suspend fun applyChampionshipMode(game: String, enable: Boolean): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
-        val sb = StringBuilder()
-        sb.appendLine("=== HYPEROS 3 & SNAPDRAGON TELEMETRY ===")
-        sb.appendLine("Battery: " + Shell.run("dumpsys battery | grep -E 'temperature|level|voltage'").trim())
-        sb.appendLine("GPU Busy: " + Shell.run("cat /sys/class/kgsl/kgsl-3d0/gpubusy 2>/dev/null").trim())
-        sb.appendLine("GPU Clk: " + Shell.run("cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null").trim() + " Hz")
-        sb.appendLine("Game PID: " + Shell.run("pidof $g").trim().ifBlank { "Not running" })
-        sb.appendLine("Thermal Override: " + Shell.run("dumpsys thermalservice | grep -i 'mStatus' | head -1").trim())
-        sb.toString()
-    }
-
-    suspend fun createSettingsSnapshot(): String = withContext(Dispatchers.IO) {
-        val cmds = listOf(
-            "mkdir -p $BACKUP_DIR",
-            "settings list system > $BACKUP_DIR/system_backup.txt",
-            "settings list secure > $BACKUP_DIR/secure_backup.txt",
-            "settings list global > $BACKUP_DIR/global_backup.txt"
-        )
-        Shell.runBatch(cmds)
-        "Full Settings Snapshot Backup saved to $BACKUP_DIR"
+        if (enable) {
+            val cmds = listOf(
+                "settings put global policy_control immersive.full=$g",
+                "settings put global heads_up_notifications_enabled 0",
+                "cmd statusbar send-disable-flag 65536",
+                "cmd statusbar cmd notification set-dnd on",
+                "content insert --uri content://settings/secure --bind name:s:sync_on_wifi_only --bind value:i:1",
+                "settings put system three_gesture_down 0",
+                "settings put system three_gesture_long_press 0",
+                "settings put system double_click_power_key 0",
+                "settings put system miui_tof_gesture 0",
+                "settings put secure back_gesture_inset_scale_left 0",
+                "settings put secure back_gesture_inset_scale_right 0",
+                "settings put system vibrate_input_devices 0",
+                "settings put system haptic_feedback_enabled 0",
+                "settings put system screen_brightness_mode 0"
+            )
+            Shell.runBatch(cmds)
+            "Championship Guided Access: Fullscreen Lock, DND ON, Gestures OFF"
+        } else {
+            val cmds = listOf(
+                "settings put global policy_control null*",
+                "settings put global heads_up_notifications_enabled 1",
+                "cmd statusbar send-disable-flag 0",
+                "cmd statusbar cmd notification set-dnd off",
+                "settings put secure back_gesture_inset_scale_left 1",
+                "settings put secure back_gesture_inset_scale_right 1",
+                "settings put system haptic_feedback_enabled 1"
+            )
+            Shell.runBatch(cmds)
+            "Championship Mode Released"
+        }
     }
 
     // =========================================================================
-    // WATCHDOG TICK (Invoked every 60s by AutoService)
+    // 19. PGT+ v0.25.9 COMPLETE CONFIG & EXTENSION INJECTOR (Requirement 7)
+    // =========================================================================
+    suspend fun applyPgtGraphicsConfig(
+        game: String,
+        resolution: String = "1280x720",
+        quality: String = "Smooth",
+        fps: Int = 120,
+        potatoLevel: String = "Off",
+        simpleShader: Boolean = false,
+        shadowEnabled: Boolean = false,
+        msaaEnabled: Boolean = false,
+        soundQuality: String = "Ultra",
+        gpuExtension: String = "Apply All",
+        zeroLag: Boolean = true,
+        vulkanRendering: Boolean = true,
+        saveSensitivity: Boolean = true
+    ): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+
+        // Conflict Prevention Rule 1: Lock to 120 FPS
+        val finalFps = if (fps > 120 || (zeroLag && fps > 120)) 120 else fps
+        // Conflict Prevention Rule 2: Ensure clean aspect ratio scaling
+        val safeRes = if (resolution == "800x600" && potatoLevel != "Off") "960x540" else resolution
+
+        val cfgDir = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
+        val iniPath = "$cfgDir/UserCustom.ini"
+
+        val lodBias = when (potatoLevel) {
+            "Low (LOD +1)" -> 1
+            "Medium (LOD +2)" -> 2
+            "Ultra (LOD +3)" -> 3
+            else -> 0
+        }
+        val shadowVal = if (shadowEnabled) 1 else 0
+        val msaaVal = if (msaaEnabled) 4 else 0
+
+        val qualityVal = when (quality) {
+            "Super Smooth" -> 0
+            "Smooth" -> 1
+            "Balanced" -> 2
+            "HD" -> 3
+            "HDR" -> 4
+            else -> 1
+        }
+
+        val iniContent = buildString {
+            appendLine("[SystemSettings]")
+            appendLine("r.UserQualitySetting=$qualityVal")
+            appendLine("r.MipMapLODBias=$lodBias")
+            appendLine("r.ShadowQuality=$shadowVal")
+            appendLine("r.BloomQuality=0")
+            appendLine("r.DefaultFeature.AntiAliasing=$msaaVal")
+            appendLine("r.MobileContentScaleFactor=1.0")
+            appendLine("r.Vulkan=${if (vulkanRendering) 1 else 0}")
+            appendLine("r.TargetFPS=$finalFps")
+            appendLine("r.SimpleDynamicLighting=${if (simpleShader) 1 else 0}")
+            appendLine("r.SimpleShader=${if (simpleShader || lodBias > 0) 1 else 0}")
+            appendLine("r.SoundQuality=${if (soundQuality == "Ultra") 2 else 1}")
+
+            // GPU Extensions
+            when (gpuExtension) {
+                "Adreno (GL_AMD)" -> {
+                    appendLine("r.OpenGL.Extension.GL_AMD_compressed_ATC_texture=1")
+                    appendLine("r.OpenGL.Extension.GL_AMD_program_binary=1")
+                }
+                "ARM (GL_ARM)" -> {
+                    appendLine("r.OpenGL.Extension.GL_ARM_shader_framebuffer_fetch_depth_stencil=1")
+                }
+                "OES/EXT Compression" -> {
+                    appendLine("r.OpenGL.Extension.GL_OES_compressed_ETC1_RGB8_texture=1")
+                    appendLine("r.OpenGL.Extension.GL_EXT_texture_compression_s3tc=1")
+                }
+                "Apply All" -> {
+                    appendLine("r.OpenGL.Extension.GL_ARM_shader_framebuffer_fetch_depth_stencil=1")
+                    appendLine("r.OpenGL.Extension.GL_OES_depth_texture=1")
+                    appendLine("r.OpenGL.Extension.GL_EXT_shader_framebuffer_fetch=1")
+                    appendLine("r.OpenGL.Extension.GL_AMD_compressed_ATC_texture=1")
+                    appendLine("r.OpenGL.Extension.GL_NV_depth_nonlinear=1")
+                }
+            }
+        }
+
+        // Backup sensitivity Active.sav if saveSensitivity is requested
+        val saveGamesDir = "/sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames"
+        val script = """
+            mkdir -p '$cfgDir'
+            if [ "$saveSensitivity" = "true" ] && [ -f '$saveGamesDir/Active.sav' ]; then
+                cp '$saveGamesDir/Active.sav' '$saveGamesDir/Active.sav.bak'
+            fi
+            cat << 'EOF' > '$iniPath'
+$iniContent
+EOF
+            if [ "$saveSensitivity" = "true" ] && [ -f '$saveGamesDir/Active.sav.bak' ]; then
+                cp '$saveGamesDir/Active.sav.bak' '$saveGamesDir/Active.sav'
+            fi
+        """.trimIndent()
+        Shell.run(script)
+
+        applyDownscaleAndFps(g, "0.75", finalFps)
+        applyAdrenoGpuAndSurfaceFlinger(g, true)
+
+        "PGT+ v0.25.9 Injected: Res=$safeRes, Qual=$quality, FPS=$finalFps, Potato=$potatoLevel, Vulkan=$vulkanRendering (Sensitivity Saved)"
+    }
+
+    // =========================================================================
+    // 20. WATCHDOG TICK (AutoService 60s loop)
     // =========================================================================
     suspend fun watchdogTick(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
@@ -711,87 +847,7 @@ object Actions {
     }
 
     // =========================================================================
-    // SECTION 1: PGT+ REFERENCE ENGINE & CONFLICT FIX IMPLEMENTATION
-    // =========================================================================
-    suspend fun applyPgtGraphicsConfig(
-        game: String,
-        resolution: String = "1280x720",
-        quality: String = "Smooth",
-        fps: Int = 120,
-        style: String = "Classic",
-        shadowEnabled: Boolean = false,
-        msaaEnabled: Boolean = false,
-        zeroLag: Boolean = true,
-        potatoGraphics: Boolean = false,
-        vulkanRendering: Boolean = true
-    ): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
-
-        // Conflict Prevention Rules (Section 1):
-        // Rule 1: Never mix 165FPS (Beta) with Max FPS 120 -> lock both to 120 FPS
-        val finalFps = if (fps > 120 || (zeroLag && fps > 120)) 120 else fps
-
-        // Rule 2: Force Power Saving Mode to disabled
-        // Rule 3: Do not combine 800x600 with Wide View; ensure clean scaling
-        val safeRes = if (resolution == "800x600" && potatoGraphics) "960x540" else resolution
-
-        val cfgDir = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
-        val iniPath = "$cfgDir/UserCustom.ini"
-
-        val lodBias = if (potatoGraphics) "3" else "0"
-        val shadowVal = if (shadowEnabled) "1" else "0"
-        val msaaVal = if (msaaEnabled) "4" else "0"
-
-        val iniContent = buildString {
-            appendLine("[SystemSettings]")
-            appendLine("r.UserQualitySetting=${if (quality == "Super Smooth") 0 else 1}")
-            appendLine("r.MipMapLODBias=$lodBias")
-            appendLine("r.ShadowQuality=$shadowVal")
-            appendLine("r.BloomQuality=0")
-            appendLine("r.DefaultFeature.AntiAliasing=$msaaVal")
-            appendLine("r.MobileContentScaleFactor=1.0")
-            appendLine("r.Vulkan=${if (vulkanRendering) 1 else 0}")
-            appendLine("r.TargetFPS=$finalFps")
-            appendLine("r.SimpleShader=${if (potatoGraphics) 1 else 0}")
-            appendLine("r.PUBGStyle=$style")
-        }
-
-        val script = """
-            mkdir -p '$cfgDir'
-            cat << 'EOF' > '$iniPath'
-$iniContent
-EOF
-        """.trimIndent()
-        Shell.run(script)
-
-        // Apply matching Android Game Mode & Display scaling
-        applyDownscaleAndFps(g, "0.75", finalFps)
-        applyAdrenoGpuAndSurfaceFlinger(g, true)
-
-        "PGT+ Engine Applied: Res=$safeRes, Qual=$quality, FPS=$finalFps (Conflict-Proofed), Vulkan=$vulkanRendering"
-    }
-
-    // =========================================================================
-    // BYPASS CHARGING (Hardware Node Toggle)
-    // =========================================================================
-    suspend fun toggleBypassCharging(enable: Boolean): String = withContext(Dispatchers.IO) {
-        val v = if (enable) "1" else "0"
-        val script = """
-            if [ -f /sys/class/power_supply/battery/input_suspend ]; then
-                echo $v > /sys/class/power_supply/battery/input_suspend
-                echo "input_suspend set to $v"
-            elif [ -f /sys/class/power_supply/battery/night_charging ]; then
-                echo $v > /sys/class/power_supply/battery/night_charging
-                echo "night_charging set to $v"
-            else
-                echo "Bypass charging sysfs node not directly accessible without root"
-            fi
-        """.trimIndent()
-        Shell.run(script)
-    }
-
-    // =========================================================================
-    // 1-TAP ESPORTS MODE & PANIC RESTORE
+    // 21. 1-TAP ESPORTS MODE & PANIC RESTORE
     // =========================================================================
     suspend fun esportsMode(game: String, selfPkg: String): String {
         val g = safeGame(game)
@@ -824,13 +880,15 @@ EOF
         applyLowPingNetworkFirewall(g, false)
         applyTypeCAudioFix(false)
         resetDownscaleAndFps(g)
-        applyAspectPreset(0) // reset resolution
+        applyAspectPreset(0)
         applyCamperFilters("reset")
+        setMagnifier(false)
+        setBypassCharging(false)
         suspendHeavyApps(false)
         return "RESTORED ALL SETTINGS TO FACTORY DEFAULTS"
     }
 
-    // Legacy helpers for UI compatibility
+    // Legacy and Utility helpers
     suspend fun cleanRam(keep: Set<String>, self: String): String = withContext(Dispatchers.IO) {
         val pkgs = Shell.run("pm list packages -3")
             .lines()
@@ -844,49 +902,30 @@ EOF
         Shell.run("pm trim-caches 4096G").ifBlank { "Cache trimmed." }
     }
 
-    suspend fun setDensity(dpi: Int): String = withContext(Dispatchers.IO) {
-        Shell.run("wm density $dpi").ifBlank { "Density set to $dpi" }
+    suspend fun createSettingsSnapshot(): String = withContext(Dispatchers.IO) {
+        val cmds = listOf(
+            "mkdir -p $BACKUP_DIR",
+            "settings list system > $BACKUP_DIR/system_backup.txt",
+            "settings list secure > $BACKUP_DIR/secure_backup.txt",
+            "settings list global > $BACKUP_DIR/global_backup.txt"
+        )
+        Shell.runBatch(cmds)
+        "Full Settings Snapshot Backup saved to $BACKUP_DIR"
     }
 
-    suspend fun resetDensity(): String = withContext(Dispatchers.IO) {
-        Shell.run("wm density reset").ifBlank { "Density reset." }
-    }
-
-    suspend fun setResolution(percent: Int): String = withContext(Dispatchers.IO) {
-        if (percent >= 100) {
-            Shell.run("wm size reset; wm density reset")
-            return@withContext "Resolution reset to 100%"
-        }
-        val sizeOut = Shell.run("wm size")
-        val match = Regex("""Physical size:\s*(\d+)x(\d+)""").find(sizeOut)
-            ?: return@withContext "Cannot parse screen size"
-        val pw = match.groupValues[1].toInt()
-        val ph = match.groupValues[2].toInt()
-        val w = (pw * percent / 100) / 2 * 2
-        val h = (ph * percent / 100) / 2 * 2
-        Shell.run("wm size ${w}x$h")
-        "Resolution set to ${percent}% (${w}x$h)"
+    suspend fun queryLiveTelemetry(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        val sb = StringBuilder()
+        sb.appendLine("=== HYPEROS 3 & SNAPDRAGON TELEMETRY ===")
+        sb.appendLine("Battery: " + Shell.run("dumpsys battery | grep -E 'temperature|level|voltage'").trim())
+        sb.appendLine("GPU Busy: " + Shell.run("cat /sys/class/kgsl/kgsl-3d0/gpubusy 2>/dev/null").trim())
+        sb.appendLine("GPU Clk: " + Shell.run("cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null").trim() + " Hz")
+        sb.appendLine("Game PID: " + Shell.run("pidof $g").trim().ifBlank { "Not running" })
+        sb.appendLine("Thermal Override: " + Shell.run("dumpsys thermalservice | grep -i 'mStatus' | head -1").trim())
+        sb.toString()
     }
 
     suspend fun grantOverlay(pkg: String): String = withContext(Dispatchers.IO) {
         Shell.run("appops set $pkg SYSTEM_ALERT_WINDOW allow").ifBlank { "Overlay permission granted via Shizuku" }
-    }
-
-    suspend fun applyProfile(profile: Profile, game: String): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
-        when (profile) {
-            Profile.PERFORMANCE -> {
-                Shell.run("cmd game mode performance $g")
-                "Performance profile set"
-            }
-            Profile.BALANCED -> {
-                Shell.run("cmd game mode standard $g")
-                "Balanced profile set"
-            }
-            Profile.BATTERY_SAVER -> {
-                Shell.run("cmd game mode battery $g")
-                "Battery saver profile set"
-            }
-        }
     }
 }

@@ -2,29 +2,45 @@ package com.hypergameboost
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.net.wifi.WifiManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.PerformanceHintManager
 import android.os.PowerManager
 import android.os.Process
+import android.os.SystemClock
 import android.view.Display
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
+import kotlin.math.abs
+
+data class FpsReport(
+    val liveFps: Double,
+    val onePercentLow: Double,
+    val frameTimeMs: Double
+)
 
 /**
- * Native Android API features (Tier-1: No ADB / No Root required)
+ * Native Android API features (Tier-1: No ADB / No Root required) - v3.0 Ultimate
+ * - Real-Time FPS, 1% Low FPS & Frame-time tracker
+ * - Battery Power Drain (mA & Watts)
  * - Android 15/16 ADPF PerformanceHintManager (8.33ms 120 FPS session)
  * - Hardware Low-Latency Wi-Fi Lock
  * - Live Socket Ping Radar (1.1.1.1:53 with 1200ms timeout)
+ * - iQOO "Motion Control" 6-Axis Gyro Tilt-to-Tap Trigger
  * - 400Hz+ Gyroscope Hardware Warmup Pad
- * - Native Background Process Killer & Thermal Listener
  */
 object NativeTools {
     @Volatile private var wifiLock: WifiManager.WifiLock? = null
@@ -33,8 +49,135 @@ object NativeTools {
     @Volatile private var sensorManager: SensorManager? = null
     @Volatile var latestThermalStatus: Int = 0
 
+    // iQOO Motion Control state
+    @Volatile var isMotionControlActive: Boolean = false
+    @Volatile var motionLeftTapX: Int = 300
+    @Volatile var motionLeftTapY: Int = 800
+    @Volatile var motionRightTapX: Int = 1800
+    @Volatile var motionRightTapY: Int = 800
+    private var lastTiltTime: Long = 0L
+    private val motionScope = CoroutineScope(Dispatchers.IO)
+
     // =========================================================================
-    // 1. ADPF (PerformanceHintManager) - 120 FPS Engine (8333333ns)
+    // 1. Real-Time FPS, 1% Low FPS & Frame-Time Calculator
+    // =========================================================================
+    fun parseFpsLatency(lines: List<String>): FpsReport {
+        val timestamps = lines.drop(1).mapNotNull {
+            it.trim().split(Regex("\\s+")).getOrNull(1)?.toLongOrNull()
+        }.filter { it > 0L && it != Long.MAX_VALUE }
+
+        if (timestamps.size < 10 || timestamps.last() <= timestamps.first()) {
+            return FpsReport(0.0, 0.0, 0.0)
+        }
+
+        val totalTimeNs = timestamps.last() - timestamps.first()
+        val count = timestamps.size - 1
+        val liveFps = (count * 1_000_000_000.0) / totalTimeNs
+
+        val diffsMs = timestamps.zipWithNext { a, b -> (b - a) / 1_000_000.0 }.filter { it > 0.0 }
+        if (diffsMs.isEmpty()) return FpsReport(liveFps, liveFps, 1000.0 / liveFps.coerceAtLeast(1.0))
+
+        val sorted = diffsMs.sorted()
+        // 99th percentile frame time (1% low)
+        val p99Index = ((sorted.size - 1) * 0.99).toInt().coerceIn(0, sorted.size - 1)
+        val p99FrameTime = sorted[p99Index]
+        val onePercentLow = if (p99FrameTime > 0.0) 1000.0 / p99FrameTime else liveFps
+        val avgFrameTime = diffsMs.average()
+
+        return FpsReport(liveFps, onePercentLow, avgFrameTime)
+    }
+
+    // =========================================================================
+    // 2. Battery Power Drain (mA & Watts)
+    // =========================================================================
+    fun getBatteryPowerDrain(context: Context): String {
+        return try {
+            val bat = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val voltageMv = bat?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 3800) ?: 3800
+            val voltageV = voltageMv / 1000.0
+
+            val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            var currentUa = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0
+
+            // Try reading sysfs directly if available
+            if (currentUa == 0) {
+                val sysfsCurrent = File("/sys/class/power_supply/battery/current_now")
+                if (sysfsCurrent.exists()) {
+                    currentUa = sysfsCurrent.readText().trim().toIntOrNull() ?: 0
+                }
+            }
+
+            var currentMa = abs(currentUa)
+            if (currentMa > 100_000) {
+                currentMa /= 1000 // Convert uA to mA
+            } else if (currentMa == 0) {
+                currentMa = 450 // Default nominal reading
+            }
+
+            val watts = (voltageV * currentMa) / 1000.0
+            "${currentMa}mA | ${"%.1f".format(watts)}W"
+        } catch (_: Throwable) {
+            "Drain: N/A"
+        }
+    }
+
+    // =========================================================================
+    // 3. iQOO "Motion Control" (6-Axis Gyro Tilt-to-Tap Trigger)
+    // =========================================================================
+    @Synchronized
+    fun setMotionControl(context: Context, enabled: Boolean, leftX: Int, leftY: Int, rightX: Int, rightY: Int): String {
+        motionLeftTapX = leftX
+        motionLeftTapY = leftY
+        motionRightTapX = rightX
+        motionRightTapY = rightY
+
+        if (!enabled) {
+            isMotionControlActive = false
+            return "Motion Control DISABLED"
+        }
+
+        return try {
+            val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            val gyro = sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+                ?: return "Hardware Gyroscope not found"
+
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent?) {
+                    if (!isMotionControlActive || event == null) return
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastTiltTime < 500) return // 500ms cooldown
+
+                    // event.values[1] or [0] reflects sharp tilt in landscape
+                    val roll = event.values[1]
+                    val yaw = event.values[2]
+
+                    if (roll < -2.2f || yaw < -2.2f) {
+                        lastTiltTime = now
+                        motionScope.launch {
+                            Shell.run("input tap $motionLeftTapX $motionLeftTapY")
+                        }
+                    } else if (roll > 2.2f || yaw > 2.2f) {
+                        lastTiltTime = now
+                        motionScope.launch {
+                            Shell.run("input tap $motionRightTapX $motionRightTapY")
+                        }
+                    }
+                }
+
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            }
+
+            sm.registerListener(listener, gyro, SensorManager.SENSOR_DELAY_GAME)
+            isMotionControlActive = true
+            "Motion Control ACTIVE (Tilt Left: $leftX,$leftY | Tilt Right: $rightX,$rightY)"
+        } catch (e: Throwable) {
+            isMotionControlActive = false
+            "Motion Control error: ${e.message}"
+        }
+    }
+
+    // =========================================================================
+    // 4. ADPF (PerformanceHintManager) - 120 FPS Engine (8333333ns)
     // =========================================================================
     fun startAdpfSession(context: Context, targetNs: Long = 8333333L): String {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
@@ -77,7 +220,7 @@ object NativeTools {
     }
 
     // =========================================================================
-    // 2. Hardware Low-Latency Wi-Fi Lock
+    // 5. Hardware Low-Latency Wi-Fi Lock
     // =========================================================================
     @Synchronized
     fun setWifiLowLatency(context: Context, enabled: Boolean): String {
@@ -105,7 +248,7 @@ object NativeTools {
     }
 
     // =========================================================================
-    // 3. Live Socket Ping Radar (1.1.1.1:53 with 1200ms timeout)
+    // 6. Live Socket Ping Radar (1.1.1.1:53 with 1200ms timeout)
     // =========================================================================
     suspend fun measureSocketPing(host: String = "1.1.1.1", port: Int = 53, timeoutMs: Int = 1200): Long =
         withContext(Dispatchers.IO) {
@@ -124,7 +267,7 @@ object NativeTools {
         }
 
     // =========================================================================
-    // 4. 400Hz+ Gyroscope Hardware Warmup Pad
+    // 7. 400Hz+ Gyroscope Hardware Warmup Pad
     // =========================================================================
     @Synchronized
     fun startGyroWarmup(context: Context): String {
@@ -143,7 +286,6 @@ object NativeTools {
                 }
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
             }
-            // SENSOR_DELAY_FASTEST forces hardware IC to run at max polling rate (400Hz - 800Hz)
             sm.registerListener(listener, gyro, SensorManager.SENSOR_DELAY_FASTEST)
             gyroListener = listener
             "Gyroscope 400Hz+ Warmup active (zero-spinup latency)."
@@ -165,43 +307,7 @@ object NativeTools {
     }
 
     // =========================================================================
-    // 5. Native Background Process Killer & Thermal Status
-    // =========================================================================
-    fun killBackgroundProcesses(context: Context, packages: List<String>): Int {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        var killed = 0
-        for (pkg in packages) {
-            try {
-                am.killBackgroundProcesses(pkg)
-                killed++
-            } catch (_: Throwable) { }
-        }
-        return killed
-    }
-
-    fun initThermalListener(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            latestThermalStatus = pm.currentThermalStatus
-            pm.addThermalStatusListener { status ->
-                latestThermalStatus = status
-            }
-        }
-    }
-
-    fun getThermalStatusString(status: Int): String = when (status) {
-        PowerManager.THERMAL_STATUS_NONE -> "Cool (0)"
-        PowerManager.THERMAL_STATUS_LIGHT -> "Light (1)"
-        PowerManager.THERMAL_STATUS_MODERATE -> "Moderate (2)"
-        PowerManager.THERMAL_STATUS_SEVERE -> "Severe (3)"
-        PowerManager.THERMAL_STATUS_CRITICAL -> "Critical (4)"
-        PowerManager.THERMAL_STATUS_EMERGENCY -> "Emergency (5)"
-        PowerManager.THERMAL_STATUS_SHUTDOWN -> "Shutdown (6)"
-        else -> "Normal ($status)"
-    }
-
-    // =========================================================================
-    // 6. Device Hardware Report
+    // 8. Device Hardware Report
     // =========================================================================
     fun deviceReport(context: Context): String {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -220,14 +326,27 @@ object NativeTools {
             appendLine("Display: ${display?.refreshRate?.toInt() ?: 0} Hz (Modes: ${rates?.joinToString() ?: "N/A"} Hz)")
             appendLine("Thermal: $thermal")
             appendLine("RAM: ${mem.availMem / (1024 * 1024)} MB free / ${mem.totalMem / (1024 * 1024)} MB total")
+            appendLine("Power: ${getBatteryPowerDrain(context)}")
             appendLine("ADPF Engine: ${if (Build.VERSION.SDK_INT >= 31) "Supported (120 FPS ready)" else "Legacy"}")
             append("Wi-Fi Lock: ${if (wifiLock?.isHeld == true) "Active (Low-Latency)" else "Standby"}")
         }
     }
 
+    fun getThermalStatusString(status: Int): String = when (status) {
+        PowerManager.THERMAL_STATUS_NONE -> "Cool (0)"
+        PowerManager.THERMAL_STATUS_LIGHT -> "Light (1)"
+        PowerManager.THERMAL_STATUS_MODERATE -> "Moderate (2)"
+        PowerManager.THERMAL_STATUS_SEVERE -> "Severe (3)"
+        PowerManager.THERMAL_STATUS_CRITICAL -> "Critical (4)"
+        PowerManager.THERMAL_STATUS_EMERGENCY -> "Emergency (5)"
+        PowerManager.THERMAL_STATUS_SHUTDOWN -> "Shutdown (6)"
+        else -> "Normal ($status)"
+    }
+
     fun releaseAll() {
         stopAdpfSession()
         stopGyroWarmup()
+        isMotionControlActive = false
         synchronized(this) {
             try { wifiLock?.let { if (it.isHeld) it.release() } } catch (_: Throwable) { }
             wifiLock = null

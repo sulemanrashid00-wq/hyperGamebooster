@@ -5,23 +5,28 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
+import android.media.audiofx.Visualizer
 import kotlin.math.PI
+import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * 5-Band Tactical Footstep Equalizer & Stereo Channel Tester (Section 2 & 3)
- * - Boosts 1kHz-4.5kHz footstep sound frequency band
- * - Cuts low-frequency rumble & grenade bass (<180Hz)
- * - LoudnessEnhancer +600mB gain
- * - 44.1kHz Stereo PCM test generator (520Hz Left / 780Hz Right)
+ * AudioTest & RedMagic Sonic Radar Engine (v3.0 Ultimate)
+ * - 5-Band Tactical Footstep Equalizer & LoudnessEnhancer (+600mB)
+ * - 44.1kHz Stereo PCM sine wave tester (520Hz Left / 780Hz Right)
+ * - RedMagic "Sonic Radar" Visualizer(0) capturing 1kHz–4kHz footstep/gunshot frequencies
  */
 object AudioTest {
     private var eq: Equalizer? = null
     private var le: LoudnessEnhancer? = null
+    private var visualizer: Visualizer? = null
+
+    @Volatile var currentThreatLevel: Int = 0 // 0 to 100
+    @Volatile var isSonicRadarActive: Boolean = false
 
     /**
      * Dirac / Spatial Footstep Audio 5-Band Equalizer:
-     * - Cuts bass < 180Hz by -50% to prevent grenade concussion masking footsteps
+     * - Cuts bass < 180Hz to prevent grenade concussion masking footsteps
      * - Boosts 1000Hz - 4500Hz footsteps & reload clicks by +50%
      * - LoudnessEnhancer +600mB gain boost
      */
@@ -60,6 +65,76 @@ object AudioTest {
             }
         } catch (e: Throwable) {
             "Audio FX error: ${e.message}"
+        }
+    }
+
+    /**
+     * RedMagic "Sonic Radar" Engine:
+     * Attaches android.media.audiofx.Visualizer(0) to read live FFT data
+     * Computes amplitude in 1kHz–4kHz range to alert user of nearby footsteps/fire
+     */
+    @Synchronized
+    fun startSonicRadar(): String {
+        if (isSonicRadarActive) return "Sonic Radar already active"
+        return try {
+            val captureSize = Visualizer.getCaptureSizeRange()[0].coerceAtLeast(128)
+            val vis = Visualizer(0).apply {
+                setDataCaptureListener(
+                    object : Visualizer.OnDataCaptureListener {
+                        override fun onWaveFormDataCapture(v: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
+
+                        override fun onFftDataCapture(v: Visualizer?, fft: ByteArray?, samplingRate: Int) {
+                            if (fft == null || fft.size < 4) return
+                            // fft format: [real0, imag0, real1, imag1, ...]
+                            // Calculate energy around 1kHz to 4kHz (footstep and gunshot frequencies)
+                            val n = fft.size / 2
+                            val binHz = (samplingRate.toDouble() / 1000.0) / (2.0 * n)
+                            var totalMag = 0.0
+                            var countedBins = 0
+
+                            for (i in 1 until n) {
+                                val freq = i * binHz
+                                if (freq in 1.0..4.5) { // 1000Hz to 4500Hz
+                                    val r = fft[2 * i].toDouble()
+                                    val im = fft[2 * i + 1].toDouble()
+                                    totalMag += hypot(r, im)
+                                    countedBins++
+                                }
+                            }
+
+                            val avgMag = if (countedBins > 0) totalMag / countedBins else 0.0
+                            // Normalize 0-100 scale
+                            val threat = (avgMag * 2.2).toInt().coerceIn(0, 100)
+                            currentThreatLevel = threat
+                        }
+                    },
+                    Visualizer.getMaxCaptureRate() / 2,
+                    false,
+                    true
+                )
+                setCaptureSize(captureSize)
+                enabled = true
+            }
+            visualizer = vis
+            isSonicRadarActive = true
+            "Sonic Radar Visualizer ACTIVE (1kHz–4.5kHz Live Compass)"
+        } catch (e: Throwable) {
+            isSonicRadarActive = false
+            "Sonic Radar unavailable: ${e.message}"
+        }
+    }
+
+    @Synchronized
+    fun stopSonicRadar(): String {
+        return try {
+            visualizer?.enabled = false
+            visualizer?.release()
+            visualizer = null
+            isSonicRadarActive = false
+            currentThreatLevel = 0
+            "Sonic Radar STOPPED"
+        } catch (e: Throwable) {
+            "Sonic Radar stop error: ${e.message}"
         }
     }
 

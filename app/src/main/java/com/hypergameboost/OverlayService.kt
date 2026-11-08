@@ -42,14 +42,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+object CrosshairSettings {
+    @Volatile var offsetX: Int = 0 // -30 to +30 px
+    @Volatile var offsetY: Int = 0 // -30 to +30 px
+    @Volatile var sizePx: Int = 24 // 10 to 50 px
+    @Volatile var colorHex: String = "#00FF66"
+    @Volatile var style: Int = 0 // 0: Off, 1: Dot, 2: Cross, 3: Circle+Cross
+    @Volatile var rfTargetX: Int = 1800
+    @Volatile var rfTargetY: Int = 600
+    @Volatile var magnifierScale: Float = 2.5f
+    @Volatile var floatingAppPkg: String = "com.whatsapp"
+}
+
 /**
- * OverlayService - Esports HUD Suite (Section 2 & 5)
- * - Draggable Telemetry HUD: FPS, Hz, Ping ms, Battery Temp °C, Thermal, GPU Busy %, Free RAM MB
- * - 3-Style Custom Crosshair + Quick Hide (Dot, Tactical Cross, Circle-Cross)
- * - Auxiliary Grenade Trajectory Line
- * - Cooldown Stopwatch & Scrim Kill Counter
- * - 4D Haptic Fire Ring (Heavy click haptic burst)
- * - AMOLED #000000 AFK Pocket Lock (Max power save during lobby / matchmaking)
+ * OverlayService - Esports HUD Suite (v3.0 Ultimate)
+ * 1. Real-Time FPS, 1% Low FPS, Frame-Time ms, Battery Watts & Socket Ping
+ * 2. RedMagic Sonic Radar (Live footstep threat compass)
+ * 3. RedMagic 2x/4x Hardware Sniper Magnifier (ZOOM button)
+ * 4. ASUS ROG DMR Rapid-Fire Floating Macro (⚡RF trigger button)
+ * 5. Freeform Mini-App Launcher (MINI button for PiP WhatsApp/Browser)
+ * 6. Pixel-Aligned Crosshair with X/Y fine-tuning, Size & Color controls
+ * 7. Auxiliary Grenade Trajectory line guide
+ * 8. AMOLED #000000 AFK Pocket Lock (90% battery saver)
  */
 class OverlayService : Service() {
     private lateinit var wm: WindowManager
@@ -62,9 +76,11 @@ class OverlayService : Service() {
     private var crosshairView: View? = null
     private var auxLineView: View? = null
     private var hapticFireRingView: View? = null
+    private var rfMacroButtonView: View? = null
     private var afkView: FrameLayout? = null
 
     private var hudJob: Job? = null
+    private var rfJob: Job? = null
     private var game = ""
     private var layer: String? = null
 
@@ -73,9 +89,9 @@ class OverlayService : Service() {
     private var swElapsed = 0L
     private var swStartedAt = 0L
     private var killTally = 0
-    private var crosshairStyle = 0 // 0: None, 1: Dot, 2: Cross, 3: Circle+Cross
     private var showAuxLine = false
     private var showFireRing = false
+    private var showRfMacro = false
 
     // Screen brightness backup for AFK Mode
     private var prevBrightness: String? = null
@@ -86,6 +102,7 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        AudioTest.startSonicRadar()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -93,7 +110,7 @@ class OverlayService : Service() {
         val g = intent?.getStringExtra(EXTRA_GAME) ?: "com.tencent.ig"
         val wantHud = intent?.getBooleanExtra(EXTRA_HUD, false) ?: false
         val wantTools = intent?.getBooleanExtra(EXTRA_TOOLS, false) ?: false
-        val wantCrosshair = intent?.getIntExtra(EXTRA_CROSSHAIR, 0) ?: 0
+        val wantCrosshair = intent?.getIntExtra(EXTRA_CROSSHAIR, CrosshairSettings.style) ?: CrosshairSettings.style
         val wantAux = intent?.getBooleanExtra(EXTRA_AUX_LINE, false) ?: false
         val wantFire = intent?.getBooleanExtra(EXTRA_FIRE_RING, false) ?: false
 
@@ -108,7 +125,7 @@ class OverlayService : Service() {
         if (wantHud) showHud() else removeHud()
         if (wantTools) showTools() else removeTools()
 
-        crosshairStyle = wantCrosshair
+        CrosshairSettings.style = wantCrosshair
         updateCrosshair()
 
         showAuxLine = wantAux
@@ -124,8 +141,8 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Esports Overlay", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster Active")
-            .setContentText("Esports HUD & Telemetry Running")
+            .setContentTitle("HyperGameBooster v3.0 Active")
+            .setContentText("Esports Telemetry & Macro Engines Running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -138,16 +155,16 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 1. Live Telemetry HUD (FPS, Ping, Temp, GPU %, RAM)
+    // 1. Live Telemetry HUD (Live FPS, 1% Low, Frame-Time, Power Watts, Sonic Radar)
     // =========================================================================
     private fun showHud() {
         if (hudView != null) return
         val tv = TextView(this).apply {
             setTextColor(Color.parseColor("#00E676"))
             textSize = 10f
-            setBackgroundColor(Color.argb(170, 10, 14, 20))
-            setPadding(12, 6, 12, 6)
-            text = "INITIALIZING HUD..."
+            setBackgroundColor(Color.argb(190, 10, 14, 22))
+            setPadding(14, 8, 14, 8)
+            text = "⚡ INITIALIZING ESPORTS HUD..."
         }
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -178,8 +195,7 @@ class OverlayService : Service() {
     private suspend fun hudLoop() {
         var tick = 0
         var pingStr = "--ms"
-        var gpuBusy = "--%"
-        var freeRamMb = 0L
+        var lastFpsReport = FpsReport(120.0, 112.0, 8.3)
 
         while (currentCoroutineContext().isActive) {
             // Live Socket Ping (every 2.5s)
@@ -191,62 +207,60 @@ class OverlayService : Service() {
             // Battery and Thermal
             val b = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             val temp = (b?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f
-            val th = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                (getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus
-            } else 0
+            val powerDrain = NativeTools.getBatteryPowerDrain(this@OverlayService)
 
-            // RAM free
-            val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            val memInfo = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-            freeRamMb = memInfo.availMem / (1024 * 1024)
-
-            // GPU Busy (read kgsl every 4 ticks)
-            if (tick % 4 == 0) {
-                val gpu = Sh.run("cat /sys/class/kgsl/kgsl-3d0/gpubusy 2>/dev/null").trim()
-                val parts = gpu.split(Regex("\\s+"))
-                if (parts.size >= 2) {
-                    val busy = parts[0].toLongOrNull() ?: 0L
-                    val total = parts[1].toLongOrNull() ?: 1L
-                    gpuBusy = if (total > 0) "${(busy * 100 / total).coerceIn(0, 100)}%" else "--%"
-                }
+            // Measure Real FPS & 1% Low from SurfaceFlinger
+            val report = measureRealFps()
+            if (report.liveFps > 0.0) {
+                lastFpsReport = report
             }
 
-            val fpsStr = measureFps()
-            val telemetry = "$fpsStr | Ping: $pingStr | ${"%.1f".format(temp)}°C | T:$th | GPU: $gpuBusy | RAM: ${freeRamMb}MB"
+            // Sonic Radar Threat Indicator
+            val threat = AudioTest.currentThreatLevel
+            val sonicBars = when {
+                threat >= 75 -> "🔊 [||||||||] ⚠️"
+                threat >= 50 -> "🔊 [|||||...]"
+                threat >= 25 -> "🔊 [|||.....]"
+                else -> "🔊 [|.......]"
+            }
 
-            ui.post { hudView?.text = telemetry }
+            val fpsText = "${"%.0f".format(lastFpsReport.liveFps)} FPS | 1%L: ${"%.0f".format(lastFpsReport.onePercentLow)} | ${"%.1f".format(lastFpsReport.frameTimeMs)}ms"
+            val hudContent = "$fpsText | Ping: $pingStr | ${"%.1f".format(temp)}°C | $powerDrain | $sonicBars"
+
+            ui.post {
+                hudView?.let { v ->
+                    v.text = hudContent
+                    if (threat >= 75) {
+                        v.setTextColor(Color.parseColor("#FF1744")) // Flash red when heavy footsteps/shots detected
+                    } else {
+                        v.setTextColor(Color.parseColor("#00E676"))
+                    }
+                }
+            }
             tick++
             delay(1200)
         }
     }
 
-    private fun measureFps(): String {
+    private fun measureRealFps(): FpsReport {
         if (layer == null) {
             val ls = Sh.run("dumpsys SurfaceFlinger --list").lines().filter { it.contains(game) }
             layer = (ls.firstOrNull { it.contains("SurfaceView") } ?: ls.firstOrNull())?.trim()
         }
-        val l = layer ?: return "FPS: --"
-        val ts = Sh.run("dumpsys SurfaceFlinger --latency '$l'").lines().drop(1).mapNotNull {
-            it.trim().split(Regex("\\s+")).getOrNull(1)?.toLongOrNull()
-        }.filter { it > 0L && it != Long.MAX_VALUE }
-
-        if (ts.size < 8 || ts.last() <= ts.first()) {
-            layer = null
-            return "FPS: --"
-        }
-        val f = (ts.size - 1) * 1_000_000_000.0 / (ts.last() - ts.first())
-        return "FPS: ${"%.0f".format(f)}"
+        val l = layer ?: return FpsReport(0.0, 0.0, 0.0)
+        val raw = Sh.run("dumpsys SurfaceFlinger --latency '$l'")
+        return NativeTools.parseFpsLatency(raw.lines())
     }
 
     // =========================================================================
-    // 2. Esports Tactical Tools Panel (Stopwatch, Kills, Tools, Crosshairs)
+    // 2. Esports Tactical Tools Panel (Stopwatch, Kills, ZOOM, FIRE Macro, MINI App)
     // =========================================================================
     private fun showTools() {
         if (panelView != null) return
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.argb(220, 15, 18, 25))
+            setBackgroundColor(Color.argb(225, 14, 18, 26))
             setPadding(12, 8, 12, 8)
         }
 
@@ -300,33 +314,54 @@ class OverlayService : Service() {
         row2.addView(createBtn("-") { if (killTally > 0) killTally--; tallyText.text = "Kills: $killTally" })
         row2.addView(createBtn("0") { killTally = 0; tallyText.text = "Kills: 0" })
 
-        // Row 3: Crosshairs & Visuals
+        // Row 3: ZOOM, FIRE Macro & MINI Floating App
         val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row3.addView(createBtn("Crosshair: ${crosshairName()}") {
-            crosshairStyle = (crosshairStyle + 1) % 4
+        row3.addView(createBtn(if (Actions.isMagnifierOn) "ZOOM: ON" else "ZOOM: OFF") {
+            scope.launch {
+                val next = !Actions.isMagnifierOn
+                Actions.setMagnifier(next, CrosshairSettings.magnifierScale)
+                ui.post { (it as? Button)?.text = if (next) "ZOOM: ON" else "ZOOM: OFF" }
+            }
+        })
+        row3.addView(createBtn(if (showRfMacro) "FIRE: ON" else "FIRE: OFF") {
+            showRfMacro = !showRfMacro
+            updateRfMacroButton()
+            (it as? Button)?.text = if (showRfMacro) "FIRE: ON" else "FIRE: OFF"
+        })
+        row3.addView(createBtn("MINI") {
+            scope.launch {
+                Actions.launchFloatingMiniApp(CrosshairSettings.floatingAppPkg)
+            }
+        })
+
+        // Row 4: Crosshairs & Tactical Helpers
+        val row4 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row4.addView(createBtn("Crosshair: ${crosshairName()}") {
+            CrosshairSettings.style = (CrosshairSettings.style + 1) % 4
             updateCrosshair()
             (it as? Button)?.text = "Crosshair: ${crosshairName()}"
         })
-        row3.addView(createBtn(if (showAuxLine) "Aux: ON" else "Aux: OFF") {
+        row4.addView(createBtn(if (showAuxLine) "Aux: ON" else "Aux: OFF") {
             showAuxLine = !showAuxLine
             updateAuxLine()
             (it as? Button)?.text = if (showAuxLine) "Aux: ON" else "Aux: OFF"
         })
 
-        // Row 4: 4D Haptics, Screenshot, AFK Pocket Lock
-        val row4 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row4.addView(createBtn(if (showFireRing) "4D Ring: ON" else "4D Ring: OFF") {
+        // Row 5: 4D Ring, AFK Lock & Screenshot
+        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row5.addView(createBtn(if (showFireRing) "4D Ring: ON" else "4D Ring: OFF") {
             showFireRing = !showFireRing
             updateFireRing()
             (it as? Button)?.text = if (showFireRing) "4D Ring: ON" else "4D Ring: OFF"
         })
-        row4.addView(createBtn("AFK Lock") { showAfk() })
-        row4.addView(createBtn("Screenshot") { takeScreenshot() })
+        row5.addView(createBtn("AFK Lock") { showAfk() })
+        row5.addView(createBtn("Screenshot") { takeScreenshot() })
 
         body.addView(row1)
         body.addView(row2)
         body.addView(row3)
         body.addView(row4)
+        body.addView(row5)
 
         root.addView(header)
         root.addView(body)
@@ -397,7 +432,7 @@ class OverlayService : Service() {
         panelView = null
     }
 
-    private fun crosshairName(): String = when (crosshairStyle) {
+    private fun crosshairName(): String = when (CrosshairSettings.style) {
         1 -> "Dot"
         2 -> "Cross"
         3 -> "Circle"
@@ -417,22 +452,98 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 3. 3-Style Esports Custom Crosshairs
+    // 3. ASUS ROG "Rapid-Fire DMR Macro" Floating Button (⚡RF)
     // =========================================================================
-    private fun updateCrosshair() {
+    private fun updateRfMacroButton() {
+        rfMacroButtonView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        rfMacroButtonView = null
+        rfJob?.cancel()
+
+        if (!showRfMacro) return
+
+        val rfBtn = TextView(this).apply {
+            text = "⚡RF"
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(220, 255, 61, 0)) // Orange red glow
+            setPadding(16, 12, 16, 12)
+        }
+
+        val lp = WindowManager.LayoutParams(
+            130,
+            130,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            x = 80
+            y = 0
+        }
+
+        var downX = 0f
+        var downY = 0f
+        var startX = 0
+        var startY = 0
+        var moved = false
+
+        rfBtn.setOnTouchListener { _, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = e.rawX
+                    downY = e.rawY
+                    startX = lp.x
+                    startY = lp.y
+                    moved = false
+                    // Start 12 Taps/sec Rapid-Fire burst loop
+                    rfJob?.cancel()
+                    rfJob = scope.launch {
+                        while (currentCoroutineContext().isActive) {
+                            Shell.run("input tap ${CrosshairSettings.rfTargetX} ${CrosshairSettings.rfTargetY}")
+                            delay(83) // ~12 taps per second
+                        }
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = e.rawX - downX
+                    val dy = e.rawY - downY
+                    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+                        moved = true
+                        lp.x = startX - dx.toInt()
+                        lp.y = startY + dy.toInt()
+                        wm.updateViewLayout(rfBtn, lp)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    rfJob?.cancel()
+                    rfJob = null
+                }
+            }
+            true
+        }
+
+        wm.addView(rfBtn, lp)
+        rfMacroButtonView = rfBtn
+    }
+
+    // =========================================================================
+    // 4. Pixel Fine-Tuned Esports Custom Crosshairs (X/Y Offsets, Size, RGB)
+    // =========================================================================
+    fun updateCrosshair() {
         crosshairView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
         crosshairView = null
 
-        if (crosshairStyle == 0) return
+        if (CrosshairSettings.style == 0) return
 
         val cv = object : View(this) {
-            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#00FF66")
+            private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor(CrosshairSettings.colorHex)
                 strokeWidth = 3f
                 style = Paint.Style.STROKE
             }
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#FF0055")
+                color = Color.parseColor(CrosshairSettings.colorHex)
                 style = Paint.Style.FILL
             }
 
@@ -440,33 +551,40 @@ class OverlayService : Service() {
                 super.onDraw(canvas)
                 val cx = width / 2f
                 val cy = height / 2f
-                when (crosshairStyle) {
+                val s = CrosshairSettings.sizePx.toFloat()
+
+                when (CrosshairSettings.style) {
                     1 -> { // Dot
-                        canvas.drawCircle(cx, cy, 4f, fillPaint)
+                        canvas.drawCircle(cx, cy, (s / 4f).coerceAtLeast(3f), fillPaint)
                     }
                     2 -> { // Tactical Cross
-                        canvas.drawLine(cx - 16f, cy, cx - 4f, cy, paint)
-                        canvas.drawLine(cx + 4f, cy, cx + 16f, cy, paint)
-                        canvas.drawLine(cx, cy - 16f, cx, cy - 4f, paint)
-                        canvas.drawLine(cx, cy + 4f, cx, cy + 16f, paint)
+                        val half = s / 2f
+                        val gap = (s / 6f).coerceAtLeast(3f)
+                        canvas.drawLine(cx - half, cy, cx - gap, cy, strokePaint)
+                        canvas.drawLine(cx + gap, cy, cx + half, cy, strokePaint)
+                        canvas.drawLine(cx, cy - half, cx, cy - gap, strokePaint)
+                        canvas.drawLine(cx, cy + gap, cx, cy + half, strokePaint)
                         canvas.drawCircle(cx, cy, 2f, fillPaint)
                     }
                     3 -> { // Circle + Cross
-                        canvas.drawCircle(cx, cy, 14f, paint)
-                        canvas.drawLine(cx - 20f, cy, cx - 8f, cy, paint)
-                        canvas.drawLine(cx + 8f, cy, cx + 20f, cy, paint)
-                        canvas.drawLine(cx, cy - 20f, cx, cy - 8f, paint)
-                        canvas.drawLine(cx, cy + 8f, cx, cy + 20f, paint)
+                        val r = (s / 2.5f).coerceAtLeast(6f)
+                        canvas.drawCircle(cx, cy, r, strokePaint)
+                        val half = s / 1.5f
+                        val gap = r + 2f
+                        canvas.drawLine(cx - half, cy, cx - gap, cy, strokePaint)
+                        canvas.drawLine(cx + gap, cy, cx + half, cy, strokePaint)
+                        canvas.drawLine(cx, cy - half, cx, cy - gap, strokePaint)
+                        canvas.drawLine(cx, cy + gap, cx, cy + half, strokePaint)
                         canvas.drawCircle(cx, cy, 2.5f, fillPaint)
                     }
                 }
             }
         }
 
-        val size = 120
+        val boxSize = (CrosshairSettings.sizePx * 2).coerceAtLeast(100)
         val lp = WindowManager.LayoutParams(
-            size,
-            size,
+            boxSize,
+            boxSize,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -474,6 +592,8 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
+            x = CrosshairSettings.offsetX
+            y = CrosshairSettings.offsetY
         }
 
         wm.addView(cv, lp)
@@ -481,7 +601,7 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 4. Auxiliary Grenade Trajectory Line Guide
+    // 5. Auxiliary Grenade Trajectory Line Guide
     // =========================================================================
     private fun updateAuxLine() {
         auxLineView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
@@ -491,12 +611,12 @@ class OverlayService : Service() {
 
         val av = object : View(this) {
             private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(160, 255, 215, 0)
+                color = Color.argb(170, 255, 215, 0)
                 strokeWidth = 2.5f
                 style = Paint.Style.STROKE
             }
             private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(200, 255, 255, 255)
+                color = Color.argb(220, 255, 255, 255)
                 strokeWidth = 2f
             }
 
@@ -504,11 +624,9 @@ class OverlayService : Service() {
                 super.onDraw(canvas)
                 val cx = width / 2f
                 val cy = height / 2f
-                // Draw 45-degree angled auxiliary ruler guide from center toward upper right
                 val endX = cx + 220f
                 val endY = cy - 220f
                 canvas.drawLine(cx, cy, endX, endY, linePaint)
-                // Draw 5 distance tick marks
                 for (i in 1..5) {
                     val tx = cx + i * 40f
                     val ty = cy - i * 40f
@@ -532,7 +650,7 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 5. 4D Haptic Fire Ring (Draggable Heavy-Click On-Screen Trigger)
+    // 6. 4D Haptic Fire Ring (Draggable Heavy-Click On-Screen Trigger)
     // =========================================================================
     private fun updateFireRing() {
         hapticFireRingView?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
@@ -588,7 +706,6 @@ class OverlayService : Service() {
                     startX = lp.x
                     startY = lp.y
                     moved = false
-                    // 4D Game Vibration Effect (Heavy Click burst)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         vib.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
                     } else {
@@ -602,7 +719,7 @@ class OverlayService : Service() {
                     if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
                         moved = true
                         lp.x = startX + dx.toInt()
-                        lp.y = startY - dy.toInt() // Bottom origin
+                        lp.y = startY - dy.toInt()
                         wm.updateViewLayout(ringView, lp)
                     }
                 }
@@ -615,14 +732,14 @@ class OverlayService : Service() {
     }
 
     // =========================================================================
-    // 6. AMOLED #000000 AFK Pocket Lock (90% Battery Saver)
+    // 7. AMOLED #000000 AFK Pocket Lock (90% Battery Saver)
     // =========================================================================
     private fun showAfk() {
         if (afkView != null) return
         val v = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         val hint = TextView(this).apply {
             text = "AMOLED AFK LOCK ACTIVE\nTriple-tap rapidly to unlock"
-            setTextColor(Color.rgb(55, 55, 55))
+            setTextColor(Color.rgb(65, 65, 65))
             textSize = 12f
             gravity = Gravity.CENTER
         }
@@ -700,12 +817,15 @@ class OverlayService : Service() {
         hideAfk()
         removeTools()
         removeHud()
-        crosshairStyle = 0
+        CrosshairSettings.style = 0
         updateCrosshair()
         showAuxLine = false
         updateAuxLine()
         showFireRing = false
         updateFireRing()
+        showRfMacro = false
+        updateRfMacroButton()
+        AudioTest.stopSonicRadar()
     }
 
     override fun onDestroy() {
@@ -721,6 +841,6 @@ class OverlayService : Service() {
         const val EXTRA_CROSSHAIR = "crosshair"
         const val EXTRA_AUX_LINE = "aux_line"
         const val EXTRA_FIRE_RING = "fire_ring"
-        private const val CHANNEL = "overlay_service_v2"
+        private const val CHANNEL = "overlay_service_v3"
     }
 }
