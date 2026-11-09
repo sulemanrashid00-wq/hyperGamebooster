@@ -34,8 +34,8 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v8.0 Watchdog")
-            .setContentText("Monitoring $game (Magnetic Aim & 120 FPS Lock Active)")
+            .setContentTitle("HyperGameBooster v9.0 God-Tier Watchdog")
+            .setContentText("Monitoring $game (FastConnect Wi-Fi & 120 FPS Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -96,15 +96,34 @@ class AutoService : Service() {
                     val stretchedHitbox = sp.getBoolean("stretched_hitbox_$game", false)
                     val refreshRate = sp.getFloat("refresh_rate_$game", 120.0f).toDouble()
                     val bilinearFilter = sp.getBoolean("bilinear_$game", false)
+                    val gbAim = sp.getFloat("gb_aim_$game", 100f).toInt()
+                    val gbResp = sp.getFloat("gb_resp_$game", 100f).toInt()
+                    val gbTap = sp.getFloat("gb_tap_$game", 0f).toInt()
+                    val driverMode = sp.getString("driver_$game", "system") ?: "system"
+                    val netMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
 
-                    // Apply hardware refresh rate & touch engine
+                    // Apply hardware refresh rate, zero-swap & FastConnect
                     Actions.setHardwareRefreshRate(refreshRate)
+                    Actions.apply12GbZeroSwapLock()
+                    Actions.applyZeroLatencySurfaceFlingerScanout()
+                    Actions.apply1000HzRawGyroscope(game)
+                    Actions.setGraphicsDriverType(game, driverMode)
+
+                    if (netMode == "pure_wifi") {
+                        Actions.setNetworkModePureWifiLock()
+                    } else {
+                        Actions.setNetworkModeHyperFusion(game)
+                    }
+
                     if (magneticAim) {
                         Actions.applyMagneticAimAndHitReg(game)
                     } else if (bulletReg) {
                         Actions.applyBulletRegistrationMode(game, true, rendererMode)
                     }
                     Actions.applyTouchPreset(touchPreset)
+                    Actions.setGbTouchAimAccuracy(gbAim)
+                    Actions.setGbTouchResponseSpeed(gbResp)
+                    Actions.setGbTouchTapStability(gbTap)
 
                     // Apply PGT Graphics & Downscaling
                     Actions.applyPgtGraphicsConfig(

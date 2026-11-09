@@ -363,10 +363,15 @@ class OverlayService : Service() {
     private fun measureRealFps(): FpsReport {
         if (layer == null) {
             val ls = Sh.run("dumpsys SurfaceFlinger --list").lines().filter { it.contains(game) }
-            layer = (ls.firstOrNull { it.contains("SurfaceView") } ?: ls.firstOrNull())?.trim()
+            layer = (ls.firstOrNull { it.contains("SurfaceView") }
+                ?: ls.firstOrNull { it.contains("GameActivity") }
+                ?: ls.firstOrNull())?.trim()
         }
-        val l = layer ?: return FpsReport(0.0, 0.0, 0.0)
-        val raw = Sh.run("dumpsys SurfaceFlinger --latency '$l'")
+        val targetLayer = layer ?: "SurfaceView[$game/com.epicgames.ue4.GameActivity]"
+        var raw = Sh.run("dumpsys SurfaceFlinger --latency '$targetLayer'")
+        if (raw.isBlank() || raw.lines().size <= 2) {
+            raw = Sh.run("dumpsys SurfaceFlinger --latency")
+        }
         return NativeTools.parseFpsLatency(raw.lines())
     }
 
@@ -462,6 +467,10 @@ class OverlayService : Service() {
             triggerHaptic(40)
             scope.launch {
                 val script = """
+                    settings put system gb_touch_edge_zone 0
+                    settings put system gb_touch_aim_accuracy 100
+                    settings put system gb_touch_tap_stability 0
+                    settings put system gb_touch_response_speed 100
                     settings put system gamemode_touch_optimization 1
                     settings put system gamemode_touch_aim_sensitivity 100
                     settings put system gamemode_touch_aim_response 100
@@ -481,11 +490,13 @@ class OverlayService : Service() {
                     settings put secure long_press_timeout 120
                     cmd device_config put input_native_boot resample_touch false 2>/dev/null
                     cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null
+                    cmd wifi force-low-latency-mode enabled 2>/dev/null
+                    cmd wifi force-hi-perf-mode enabled 2>/dev/null
                     cmd netd resolver flushdefaultif 2>/dev/null
                 """.trimIndent()
                 Shell.run(script)
                 Actions.pinGameProcess(game)
-                ui.post { Toast.makeText(this@OverlayService, "🎯 AIM + POTATO LOCK ACTIVE! (2560Hz + Prime Cores)", Toast.LENGTH_SHORT).show() }
+                ui.post { Toast.makeText(this@OverlayService, "🎯 AIM + POTATO LOCK ACTIVE! (2560Hz + Goodix IC + FastConnect)", Toast.LENGTH_SHORT).show() }
             }
         })
         dock.addView(row0)

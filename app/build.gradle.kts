@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "8.0-MagneticAimPotato"
+        versionCode = 9
+        versionName = "9.0-GodTier"
     }
 
     buildTypes {

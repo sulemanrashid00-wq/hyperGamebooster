@@ -316,10 +316,15 @@ fun App() {
     // Mini App
     var miniAppPkg by remember { mutableStateOf("com.whatsapp") }
 
-    // v8.0 Magnetic Aim & Potato State
+    // v9.0 God-Tier State Variables
     var downscaleFactor by remember { mutableStateOf("0.60") }
     var magneticAimActive by remember { mutableStateOf(true) }
     var stretchedHitboxActive by remember { mutableStateOf(false) }
+    var gbAimAccuracy by remember { mutableFloatStateOf(100f) }
+    var gbResponseSpeed by remember { mutableFloatStateOf(100f) }
+    var gbTapStability by remember { mutableFloatStateOf(0f) }
+    var selectedDriver by remember { mutableStateOf("system") }
+    var networkMode by remember { mutableStateOf("pure_wifi") }
 
     val sp = remember { ctx.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE) }
 
@@ -344,6 +349,11 @@ fun App() {
         magneticAimActive = sp.getBoolean("magnetic_aim_$game", true)
         stretchedHitboxActive = sp.getBoolean("stretched_hitbox_$game", false)
         hardwareRefreshRate = sp.getFloat("refresh_rate_$game", 120.0f).toDouble()
+        gbAimAccuracy = sp.getFloat("gb_aim_$game", 100f)
+        gbResponseSpeed = sp.getFloat("gb_resp_$game", 100f)
+        gbTapStability = sp.getFloat("gb_tap_$game", 0f)
+        selectedDriver = sp.getString("driver_$game", "system") ?: "system"
+        networkMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
         CrosshairSettings.magnifierScale = zoomScale
     }
 
@@ -369,6 +379,11 @@ fun App() {
             .putBoolean("magnetic_aim_$game", magneticAimActive)
             .putBoolean("stretched_hitbox_$game", stretchedHitboxActive)
             .putFloat("refresh_rate_$game", hardwareRefreshRate.toFloat())
+            .putFloat("gb_aim_$game", gbAimAccuracy)
+            .putFloat("gb_resp_$game", gbResponseSpeed)
+            .putFloat("gb_tap_$game", gbTapStability)
+            .putString("driver_$game", selectedDriver)
+            .putString("net_mode_$game", networkMode)
             .apply()
     }
 
@@ -470,7 +485,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v8.0 MAGNET & POTATO",
+                        "v9.0 GOD-TIER",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -824,20 +839,37 @@ fun App() {
                         }
                     }
 
-                    SectionCard("⚡ HYPERFUSION DUAL-CHANNEL NETWORK", "Concurrent 5G/4G + Wi-Fi Standby with 8MB UDP Buffers") {
-                        ToggleRow(
-                            label = "HyperFusion Dual-Channel Engine",
-                            subtitle = "Eliminates ping spikes in 1v1 fights by binding 5G & Wi-Fi",
-                            enabled = isReady,
-                            onAction = {
-                                hyperFusionActive = true
-                                exec { Actions.applyHyperFusionNetwork(selectedGame, true) }
-                            },
-                            offAction = {
-                                hyperFusionActive = false
-                                exec { Actions.applyHyperFusionNetwork(selectedGame, false) }
+                    SectionCard("🌐 DUAL-MODE NETWORK ESPORTS ENGINE", "Qualcomm FastConnect Wi-Fi Low-Latency vs Dual-Channel 5G+Wi-Fi") {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    networkMode = "pure_wifi"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setNetworkModePureWifiLock() }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (networkMode == "pure_wifi") Color(0xFF00E5FF) else Color(0xFF1E2836)
+                                )
+                            ) {
+                                Text("Mode A: Pure Wi-Fi Lock", fontSize = 10.sp, color = if (networkMode == "pure_wifi") Color.Black else Color.White)
                             }
-                        )
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    networkMode = "hyperfusion"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setNetworkModeHyperFusion(selectedGame) }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (networkMode == "hyperfusion") Color(0xFF00FF66) else Color(0xFF1E2836)
+                                )
+                            ) {
+                                Text("Mode B: HyperFusion 5G", fontSize = 10.sp, color = if (networkMode == "hyperfusion") Color.Black else Color.White)
+                            }
+                        }
                     }
 
                     SectionCard("🎮 ADRENO GPU GOVERNOR & DRIVER SWITCHER", "500MHz+ minimum clock floor prevents frame drop") {
@@ -859,24 +891,36 @@ fun App() {
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             FilterChip(
-                                selected = true,
-                                onClick = { exec { Actions.setGraphicsDriverType(selectedGame, "system") } },
+                                selected = selectedDriver == "system",
+                                onClick = {
+                                    selectedDriver = "system"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setGraphicsDriverType(selectedGame, "system") }
+                                },
                                 label = { Text("System Driver", fontSize = 10.sp) }
                             )
                             FilterChip(
-                                selected = false,
-                                onClick = { exec { Actions.setGraphicsDriverType(selectedGame, "game_driver") } },
+                                selected = selectedDriver == "game_driver",
+                                onClick = {
+                                    selectedDriver = "game_driver"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setGraphicsDriverType(selectedGame, "game_driver") }
+                                },
                                 label = { Text("Qualcomm Game Driver", fontSize = 10.sp) }
                             )
                             FilterChip(
-                                selected = false,
-                                onClick = { exec { Actions.setGraphicsDriverType(selectedGame, "prerelease") } },
+                                selected = selectedDriver == "prerelease",
+                                onClick = {
+                                    selectedDriver = "prerelease"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setGraphicsDriverType(selectedGame, "prerelease") }
+                                },
                                 label = { Text("Prerelease Driver", fontSize = 10.sp) }
                             )
                         }
                     }
 
-                    SectionCard("🛡️ SAFE PHONE DE-BLOAT & ZRAM TURBO", "Stops bloatware in 0.2s; WhatsApp & Gboard protected") {
+                    SectionCard("🛡️ SAFE PHONE DE-BLOAT & 12GB LPDDR5X ZERO-SWAP", "Stops 46+ resource hogs & locks physical RAM with zero CPU compaction") {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 modifier = Modifier.weight(1f),
@@ -884,16 +928,25 @@ fun App() {
                                 onClick = { exec { Actions.safeDeepPhoneDebloat(ctx) } },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EA))
                             ) {
-                                Text("1-TAP DEBLOAT", fontSize = 11.sp)
+                                Text("🛡️ 1-TAP DEBLOAT", fontSize = 10.5.sp)
                             }
                             Button(
                                 modifier = Modifier.weight(1f),
                                 enabled = isReady,
-                                onClick = { exec { Actions.compactMemoryAndPurgeCaches() } },
+                                onClick = { exec { Actions.apply12GbZeroSwapLock() } },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0091EA))
                             ) {
-                                Text("COMPACT ZRAM", fontSize = 11.sp)
+                                Text("⚡ 12GB ZERO-SWAP", fontSize = 10.5.sp)
                             }
+                        }
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            enabled = isReady,
+                            onClick = { exec { Actions.applyAotNativeCompilation(selectedGame) } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("⚡ 1-TAP AOT NATIVE CODE COMPILER (ZERO RENDER LAG)", fontSize = 11.sp, color = Color.Black)
                         }
                     }
 
@@ -935,6 +988,19 @@ fun App() {
                 // TAB 1: GFX / RES (Display Hz, Wide FOV, Smoke Anti-Lag, PGT+)
                 // =============================================================
                 1 -> {
+                    SectionCard("🖥️ ZERO-LATENCY SURFACEFLINGER SCANOUT (1:1 FRAME SYNC)", "Push frames to 120Hz panel immediately without buffer queue delay") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            enabled = isReady,
+                            onClick = { exec { Actions.applyZeroLatencySurfaceFlingerScanout() } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("🖥️ ACTIVATE ZERO-LATENCY SURFACEFLINGER SCANOUT", color = Color.Black, fontSize = 11.5.sp)
+                        }
+                        Text("Forces 2-Buffer Queue, latch_unsignaled=1, phase_offsets=0ns for real-time 120 FPS scanout.", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                    }
+
                     SectionCard("🖥️ HARDWARE REFRESH RATE SUITE", "Hard-lock screen Hz to defeat HyperOS 42°C drop") {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(60.0 to "60Hz", 90.0 to "90Hz", 120.0 to "120Hz", 144.0 to "144Hz").forEach { (hz, label) ->
@@ -942,6 +1008,7 @@ fun App() {
                                     selected = hardwareRefreshRate == hz,
                                     onClick = {
                                         hardwareRefreshRate = hz
+                                        saveProfileForGame(selectedGame)
                                         exec { Actions.setHardwareRefreshRate(hz) }
                                     },
                                     label = { Text(label, fontSize = 11.sp) }
@@ -1072,19 +1139,28 @@ fun App() {
 
                         Spacer(Modifier.height(8.dp))
 
-                        Text("Resolution:", color = Color.White, fontSize = 12.sp)
+                        Text("Resolution & Hardware Downscale (Layer 1):", color = Color.White, fontSize = 12.sp)
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("800x600", "960x540", "1280x720", "1440x720", "1600x900", "1920x1080", "2560x1440").forEach { r ->
+                            listOf(
+                                "800x600 (0.55)" to ("800x600" to "0.55"),
+                                "960x540 (0.65)" to ("960x540" to "0.65"),
+                                "1280x720 (0.75)" to ("1280x720" to "0.75"),
+                                "1440x720 (0.85)" to ("1440x720" to "0.85"),
+                                "1080p (1.0)" to ("1920x1080" to "1.0")
+                            ).forEach { (label, pair) ->
+                                val (res, scale) = pair
                                 FilterChip(
-                                    selected = pgtRes == r,
+                                    selected = pgtRes == res || downscaleFactor == scale,
                                     onClick = {
-                                        pgtRes = r
+                                        pgtRes = res
+                                        downscaleFactor = scale
                                         saveProfileForGame(selectedGame)
+                                        exec { Actions.applyDownscaleAndFps(selectedGame, scale, pgtFps) }
                                     },
-                                    label = { Text(r, fontSize = 11.sp) }
+                                    label = { Text(label, fontSize = 11.sp) }
                                 )
                             }
                         }
@@ -1312,6 +1388,63 @@ fun App() {
                         }
                     }
 
+                    SectionCard("⚡ GOODIX / FOCALTECH GAME TURBO TOUCH IC (DIRECT HOOKS)", "Instant touch response, 0 tap damping & raw micro-aim precision") {
+                        Text("gb_touch_aim_accuracy: ${gbAimAccuracy.toInt()}%", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = gbAimAccuracy,
+                            onValueChange = {
+                                gbAimAccuracy = it
+                            },
+                            onValueChangeFinished = {
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.setGbTouchAimAccuracy(gbAimAccuracy.toInt()) }
+                            },
+                            valueRange = 0f..100f,
+                            steps = 20
+                        )
+
+                        Text("gb_touch_response_speed: ${gbResponseSpeed.toInt()}%", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = gbResponseSpeed,
+                            onValueChange = {
+                                gbResponseSpeed = it
+                            },
+                            onValueChangeFinished = {
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.setGbTouchResponseSpeed(gbResponseSpeed.toInt()) }
+                            },
+                            valueRange = 0f..100f,
+                            steps = 20
+                        )
+
+                        Text("gb_touch_tap_stability: ${gbTapStability.toInt()} (0 = Raw Fast, 100 = Smooth Damped)", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = gbTapStability,
+                            onValueChange = {
+                                gbTapStability = it
+                            },
+                            onValueChangeFinished = {
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.setGbTouchTapStability(gbTapStability.toInt()) }
+                            },
+                            valueRange = 0f..100f,
+                            steps = 20
+                        )
+                    }
+
+                    SectionCard("🧭 1000Hz RAW GYROSCOPE DEADZONE REMOVER (NO IMU SMOOTHING)", "Restricts UID reset & allows high-sampling rate sensor for PUBG") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            enabled = isReady,
+                            onClick = { exec { Actions.apply1000HzRawGyroscope(selectedGame) } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF66)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("🧭 ACTIVATE 1000Hz RAW GYRO SENSOR (NO DEADZONE)", color = Color.Black, fontSize = 11.5.sp)
+                        }
+                        Text("Grants HIGH_SAMPLING_RATE_SENSORS permission & sets gyro sampling to 1000Hz with zero software lag filter.", color = Color(0xFF90A4AE), fontSize = 11.sp)
+                    }
+
                     SectionCard("🎧 FOOTSTEP LATENCY & AUDIO DAC UNCAP", "Bypasses Android safe media limit & communication latency") {
                         ToggleRow(
                             label = "Footstep Latency & Audio Bypass",
@@ -1469,6 +1602,48 @@ fun App() {
                 // TAB 3: HUD / NET / RETICLES (RedMagic Dock, 6 Pro Crosshairs)
                 // =============================================================
                 3 -> {
+                    SectionCard("📡 QUALCOMM FASTCONNECT WI-FI LOW-LATENCY LOCK (ZERO PACKET LOSS)", "Disables DTIM sleep & halts Wi-Fi/BLE background scan jitter") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            enabled = isReady,
+                            onClick = { exec { Actions.applyFastConnectWifiLowLatency(true) } },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("📡 LOCK FASTCONNECT WI-FI (ZERO JITTER & DTIM SLEEP)", color = Color.Black, fontSize = 11.5.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    networkMode = "pure_wifi"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setNetworkModePureWifiLock() }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (networkMode == "pure_wifi") Color(0xFF00E5FF) else Color(0xFF1E2836)
+                                )
+                            ) {
+                                Text("Mode A: Pure Wi-Fi Lock", fontSize = 10.sp, color = if (networkMode == "pure_wifi") Color.Black else Color.White)
+                            }
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    networkMode = "hyperfusion"
+                                    saveProfileForGame(selectedGame)
+                                    exec { Actions.setNetworkModeHyperFusion(selectedGame) }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (networkMode == "hyperfusion") Color(0xFF00FF66) else Color(0xFF1E2836)
+                                )
+                            ) {
+                                Text("Mode B: HyperFusion 5G", fontSize = 10.sp, color = if (networkMode == "hyperfusion") Color.Black else Color.White)
+                            }
+                        }
+                    }
+
                     SectionCard("⚡ REDMAGIC SLIDING CYBER DOCK & OVERLAYS", "Slide-out VIP Gaming Dock over PUBG Mobile") {
                         OutlinedButton(
                             modifier = Modifier.fillMaxWidth(),
