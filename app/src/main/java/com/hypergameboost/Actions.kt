@@ -1282,32 +1282,6 @@ EOF
 
     suspend fun esportsMode(game: String, selfPkg: String): String = applyMonsterBoost(game, selfPkg)
 
-            // Group 9: CPU Priority & Pin PID if running
-            appendLine("(")
-            appendLine("  PUBG_PID=\$(pidof $g 2>/dev/null)")
-            appendLine("  if [ ! -z \"\$PUBG_PID\" ]; then")
-            appendLine("    taskset -p -a ff \$PUBG_PID 2>/dev/null")
-            appendLine("    ionice -c 2 -n 0 -p \$PUBG_PID 2>/dev/null")
-            appendLine("  fi")
-            appendLine(") &")
-
-            appendLine("wait")
-        }
-
-        Shell.run(fastScript)
-
-        // Asynchronously inject Netcode into UserCustom.ini without blocking UI
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                injectZeroDesyncNetcodeAndSmokeAntiLag(g)
-            } catch (_: Throwable) {}
-        }
-
-        "🔥 100% STABLE ESPORTS MODE ACTIVATED in <300ms for ${Games.known[g] ?: g}"
-    }
-
-    suspend fun esportsMode(game: String, selfPkg: String): String = applyMonsterBoost(game, selfPkg)
-
     suspend fun applyTouchPreset(presetId: Int): String = withContext(Dispatchers.IO) {
         when (presetId) {
             1 -> {
