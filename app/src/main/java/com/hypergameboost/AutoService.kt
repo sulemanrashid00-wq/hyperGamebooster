@@ -66,16 +66,46 @@ class AutoService : Service() {
                 if (!wasGameRunning) {
                     wasGameRunning = true
 
-                    // 1. Activate Full Esports Mode + Bullet Registration
+                    // 1. Force Unrestricted Battery & Background Power + Full Esports Mode
+                    Actions.applyUnrestrictedPowerPolicy(game)
                     Actions.esportsMode(game, packageName)
                     NativeTools.startAdpfSession(this@AutoService, 8333333L)
                     NativeTools.setWifiLowLatency(this@AutoService, true)
 
-                    // 2. Read Per-Game SharedPreferences & apply customized profile
+                    // 2. Read Per-Game SharedPreferences & apply customized profile + Persistent GFX
                     val sp = getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE)
                     val ds = sp.getString("ds_$game", "0.75") ?: "0.75"
                     val fps = sp.getInt("fps_$game", 120)
+                    val res = sp.getString("res_$game", "1280x720") ?: "1280x720"
+                    val qual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
+                    val potato = sp.getString("potato_$game", "Off") ?: "Off"
+                    val simpleShader = sp.getBoolean("simple_shader_$game", false)
+                    val shadow = sp.getBoolean("shadow_$game", false)
+                    val msaa = sp.getBoolean("msaa_$game", false)
+                    val sound = sp.getString("sound_$game", "Ultra") ?: "Ultra"
+                    val gpuExt = sp.getString("gpu_ext_$game", "Apply All") ?: "Apply All"
                     val satMode = sp.getString("sat_$game", "eagle_eye") ?: "eagle_eye"
+                    val bypassCharge = sp.getBoolean("bypass_$game", false)
+                    val bulletReg = sp.getBoolean("bullet_reg_$game", true)
+                    val rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
+                    val wideFov = sp.getBoolean("wide_fov_$game", false)
+
+                    Actions.applyPgtGraphicsConfig(
+                        game = game,
+                        resolution = res,
+                        quality = qual,
+                        fps = fps,
+                        potatoLevel = potato,
+                        simpleShader = simpleShader,
+                        shadowEnabled = shadow,
+                        msaaEnabled = msaa,
+                        soundQuality = sound,
+                        gpuExtension = gpuExt,
+                        readOnlyLock = true
+                    )
+
+                    Actions.applyDownscaleAndFps(game, ds, fps)
+                    Actions.applyCamperFilters(satMode)
                     val bypassCharge = sp.getBoolean("bypass_$game", false)
                     val bulletReg = sp.getBoolean("bullet_reg_$game", true)
                     val rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"

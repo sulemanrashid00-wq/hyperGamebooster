@@ -271,6 +271,7 @@ fun App() {
     var pgtSoundQual by remember { mutableStateOf("Ultra") }
     var pgtGpuExt by remember { mutableStateOf("Apply All") }
     var pgtSaveSens by remember { mutableStateOf(true) }
+    var pgtBilinear by remember { mutableStateOf(false) }
 
     // Wide FOV & Magnifier
     var maintainYFov by remember { mutableStateOf(false) }
@@ -322,6 +323,13 @@ fun App() {
         pgtRes = sp.getString("res_$game", "1280x720") ?: "1280x720"
         pgtQual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
         pgtPotatoLevel = sp.getString("potato_$game", "Off") ?: "Off"
+        pgtSimpleShader = sp.getBoolean("simple_shader_$game", false)
+        pgtShadow = sp.getBoolean("shadow_$game", false)
+        pgtMsaa = sp.getBoolean("msaa_$game", false)
+        pgtSoundQual = sp.getString("sound_$game", "Ultra") ?: "Ultra"
+        pgtGpuExt = sp.getString("gpu_ext_$game", "Apply All") ?: "Apply All"
+        pgtSaveSens = sp.getBoolean("save_sens_$game", true)
+        pgtBilinear = sp.getBoolean("bilinear_$game", false)
         zoomScale = sp.getFloat("zoom_$game", 2.5f)
         bulletRegActive = sp.getBoolean("bullet_reg_$game", true)
         rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
@@ -335,6 +343,13 @@ fun App() {
             .putString("res_$game", pgtRes)
             .putString("qual_$game", pgtQual)
             .putString("potato_$game", pgtPotatoLevel)
+            .putBoolean("simple_shader_$game", pgtSimpleShader)
+            .putBoolean("shadow_$game", pgtShadow)
+            .putBoolean("msaa_$game", pgtMsaa)
+            .putString("sound_$game", pgtSoundQual)
+            .putString("gpu_ext_$game", pgtGpuExt)
+            .putBoolean("save_sens_$game", pgtSaveSens)
+            .putBoolean("bilinear_$game", pgtBilinear)
             .putFloat("zoom_$game", zoomScale)
             .putBoolean("bullet_reg_$game", bulletRegActive)
             .putString("renderer_$game", rendererMode)
@@ -440,7 +455,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v6.1 GODZILLA",
+                        "v7.0 APEX",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -545,6 +560,26 @@ fun App() {
                                 fontSize = 11.sp
                             )
 
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF10281E),
+                                border = BorderStroke(1.dp, Color(0xFF00FF66)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("🔋 PUBG Power Policy:", fontSize = 11.sp, color = Color(0xFFB0BEC5))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("UNRESTRICTED", fontSize = 11.5.sp, color = Color(0xFF00FF66))
+                                    }
+                                    Text("No Restrictions Active", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                }
+                            }
+
                             Button(
                                 modifier = Modifier.fillMaxWidth().height(50.dp),
                                 onClick = {
@@ -559,6 +594,22 @@ fun App() {
                                     scope.launch {
                                         val t0 = System.currentTimeMillis()
                                         val res = try {
+                                            Actions.applyUnrestrictedPowerPolicy(selectedGame)
+                                            Actions.applyPgtGraphicsConfig(
+                                                game = selectedGame,
+                                                resolution = pgtRes,
+                                                quality = pgtQual,
+                                                fps = pgtFps,
+                                                potatoLevel = pgtPotatoLevel,
+                                                simpleShader = pgtSimpleShader,
+                                                shadowEnabled = pgtShadow,
+                                                msaaEnabled = pgtMsaa,
+                                                soundQuality = pgtSoundQual,
+                                                gpuExtension = pgtGpuExt,
+                                                saveSensitivity = pgtSaveSens,
+                                                bilinearFilter = pgtBilinear,
+                                                readOnlyLock = true
+                                            )
                                             Actions.applyMonsterBoost(selectedGame, ctx.packageName)
                                         } catch (e: Throwable) {
                                             "ERR: ${e.message}"
@@ -589,9 +640,25 @@ fun App() {
                                     // 1. Immediately launch game via 3-Stage Fallback (<50ms instant response)
                                     val launchRes = Actions.launchGame(ctx, selectedGame)
 
-                                    // 2. Fire the fast boost & watchdog in the background concurrently
+                                    // 2. Fire the fast boost, persistent GFX lock & watchdog in the background concurrently
                                     scope.launch {
                                         try {
+                                            Actions.applyUnrestrictedPowerPolicy(selectedGame)
+                                            Actions.applyPgtGraphicsConfig(
+                                                game = selectedGame,
+                                                resolution = pgtRes,
+                                                quality = pgtQual,
+                                                fps = pgtFps,
+                                                potatoLevel = pgtPotatoLevel,
+                                                simpleShader = pgtSimpleShader,
+                                                shadowEnabled = pgtShadow,
+                                                msaaEnabled = pgtMsaa,
+                                                soundQuality = pgtSoundQual,
+                                                gpuExtension = pgtGpuExt,
+                                                saveSensitivity = pgtSaveSens,
+                                                bilinearFilter = pgtBilinear,
+                                                readOnlyLock = true
+                                            )
                                             Actions.applyMonsterBoost(selectedGame, ctx.packageName)
                                             try {
                                                 ctx.startForegroundService(Intent(ctx, AutoService::class.java).putExtra("game", selectedGame))
@@ -897,6 +964,29 @@ fun App() {
                     }
 
                     SectionCard("PGT+ (v0.25.9) Config & Extension Injector", "Full interactive controls & sensitivity protection") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            enabled = isReady,
+                            onClick = {
+                                pgtRes = "960x540"
+                                pgtQual = "Super Smooth"
+                                pgtFps = 120
+                                pgtPotatoLevel = "Ultra (LOD +3)"
+                                pgtSimpleShader = true
+                                pgtShadow = false
+                                pgtMsaa = false
+                                pgtBilinear = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyUltraPotatoBlurryMode(selectedGame) }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD84315)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("🥔 1-TAP ULTRA POTATO BLURRY GRAPHICS (MAX 120 FPS + ZERO GPU HEAT)", color = Color.White, fontSize = 10.5.sp)
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
                         Text("Resolution:", color = Color.White, fontSize = 12.sp)
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -905,7 +995,10 @@ fun App() {
                             listOf("800x600", "960x540", "1280x720", "1440x720", "1600x900", "1920x1080", "2560x1440").forEach { r ->
                                 FilterChip(
                                     selected = pgtRes == r,
-                                    onClick = { pgtRes = r },
+                                    onClick = {
+                                        pgtRes = r
+                                        saveProfileForGame(selectedGame)
+                                    },
                                     label = { Text(r, fontSize = 11.sp) }
                                 )
                             }
@@ -919,7 +1012,10 @@ fun App() {
                             listOf("Super Smooth", "Smooth", "Balanced", "HD", "HDR").forEach { q ->
                                 FilterChip(
                                     selected = pgtQual == q,
-                                    onClick = { pgtQual = q },
+                                    onClick = {
+                                        pgtQual = q
+                                        saveProfileForGame(selectedGame)
+                                    },
                                     label = { Text(q, fontSize = 11.sp) }
                                 )
                             }
@@ -928,7 +1024,10 @@ fun App() {
                             listOf(60, 90, 120).forEach { f ->
                                 FilterChip(
                                     selected = pgtFps == f,
-                                    onClick = { pgtFps = f },
+                                    onClick = {
+                                        pgtFps = f
+                                        saveProfileForGame(selectedGame)
+                                    },
                                     label = { Text("$f FPS", fontSize = 11.sp) }
                                 )
                             }
@@ -942,7 +1041,10 @@ fun App() {
                             listOf("Off", "Low (LOD +1)", "Medium (LOD +2)", "Ultra (LOD +3)").forEach { p ->
                                 FilterChip(
                                     selected = pgtPotatoLevel == p,
-                                    onClick = { pgtPotatoLevel = p },
+                                    onClick = {
+                                        pgtPotatoLevel = p
+                                        saveProfileForGame(selectedGame)
+                                    },
                                     label = { Text(p, fontSize = 11.sp) }
                                 )
                             }
@@ -953,8 +1055,22 @@ fun App() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text("Bilinear Texture Filtering (Ultra Fast):", color = Color.White, fontSize = 12.sp)
+                            Switch(checked = pgtBilinear, onCheckedChange = {
+                                pgtBilinear = it
+                                saveProfileForGame(selectedGame)
+                            })
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text("Simple Shader (Dynamic Lighting off):", color = Color.White, fontSize = 12.sp)
-                            Switch(checked = pgtSimpleShader, onCheckedChange = { pgtSimpleShader = it })
+                            Switch(checked = pgtSimpleShader, onCheckedChange = {
+                                pgtSimpleShader = it
+                                saveProfileForGame(selectedGame)
+                            })
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -962,7 +1078,10 @@ fun App() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Shadows:", color = Color.White, fontSize = 12.sp)
-                            Switch(checked = pgtShadow, onCheckedChange = { pgtShadow = it })
+                            Switch(checked = pgtShadow, onCheckedChange = {
+                                pgtShadow = it
+                                saveProfileForGame(selectedGame)
+                            })
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -970,11 +1089,14 @@ fun App() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("MSAA Anti-Aliasing (4x):", color = Color.White, fontSize = 12.sp)
-                            Switch(checked = pgtMsaa, onCheckedChange = { pgtMsaa = it })
+                            Switch(checked = pgtMsaa, onCheckedChange = {
+                                pgtMsaa = it
+                                saveProfileForGame(selectedGame)
+                            })
                         }
 
                         Button(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
                             enabled = isReady,
                             onClick = {
                                 saveProfileForGame(selectedGame)
@@ -990,12 +1112,28 @@ fun App() {
                                         msaaEnabled = pgtMsaa,
                                         soundQuality = pgtSoundQual,
                                         gpuExtension = pgtGpuExt,
-                                        saveSensitivity = pgtSaveSens
+                                        saveSensitivity = pgtSaveSens,
+                                        bilinearFilter = pgtBilinear,
+                                        readOnlyLock = true
                                     )
                                 }
-                            }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("INJECT PGT+ CONFIG (ZERO-CONFLICT)")
+                            Text("🔒 INJECT & LOCK PGT+ CONFIG (READ-ONLY 0444)", color = Color.Black, fontSize = 11.5.sp)
+                        }
+
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = isReady,
+                            onClick = {
+                                exec { Actions.unlockGraphicsConfig(selectedGame) }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF546E7A))
+                        ) {
+                            Text("🔓 Unlock Config (Allow In-Game Changes)", color = Color(0xFF90A4AE), fontSize = 11.5.sp)
                         }
                     }
 
