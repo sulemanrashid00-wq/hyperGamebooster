@@ -106,13 +106,6 @@ class AutoService : Service() {
 
                     Actions.applyDownscaleAndFps(game, ds, fps)
                     Actions.applyCamperFilters(satMode)
-                    val bypassCharge = sp.getBoolean("bypass_$game", false)
-                    val bulletReg = sp.getBoolean("bullet_reg_$game", true)
-                    val rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
-                    val wideFov = sp.getBoolean("wide_fov_$game", false)
-
-                    Actions.applyDownscaleAndFps(game, ds, fps)
-                    Actions.applyCamperFilters(satMode)
                     if (bypassCharge) {
                         Actions.setBypassCharging(true)
                     }
