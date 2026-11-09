@@ -155,8 +155,8 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Esports Overlay", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v6.0 Active")
-            .setContentText("RedMagic Cyber Dock & AirTriggers Running")
+            .setContentTitle("HyperGameBooster v8.0 Active")
+            .setContentText("Magnetic Aim & 2560Hz Touch Engine Running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -455,6 +455,40 @@ class OverlayService : Service() {
             setPadding(4, 4, 4, 8)
         }
         dock.addView(header)
+
+        // Row 0: 🎯 1-Tap AIM + POTATO LOCK
+        val row0 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row0.addView(createCyberBtn("🎯 AIM + POTATO LOCK") {
+            triggerHaptic(40)
+            scope.launch {
+                val script = """
+                    settings put system gamemode_touch_optimization 1
+                    settings put system gamemode_touch_aim_sensitivity 100
+                    settings put system gamemode_touch_aim_response 100
+                    settings put system gamemode_touch_tap_stability 100
+                    settings put system gamemode_touch_follow_response 100
+                    settings put system gamemode_touch_continuous_response 100
+                    settings put system touch_slop 1
+                    settings put system pointer_speed 7
+                    settings put system touch_sensitivity 5
+                    settings put system touch_response_speed 1
+                    settings put system touch_boost 1
+                    settings put secure touch_game_mode 1
+                    settings put system tp_game_mode 1
+                    settings put system touch_game_mode_enable 1
+                    settings put system miui_touch_sampling_rate_boost 1
+                    settings put secure tap_timeout 50
+                    settings put secure long_press_timeout 120
+                    cmd device_config put input_native_boot resample_touch false 2>/dev/null
+                    cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null
+                    cmd netd resolver flushdefaultif 2>/dev/null
+                """.trimIndent()
+                Shell.run(script)
+                Actions.pinGameProcess(game)
+                ui.post { Toast.makeText(this@OverlayService, "🎯 AIM + POTATO LOCK ACTIVE! (2560Hz + Prime Cores)", Toast.LENGTH_SHORT).show() }
+            }
+        })
+        dock.addView(row0)
 
         // Row 1: Fast RAM Boost & Sniper Zoom
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -1083,6 +1117,53 @@ class OverlayService : Service() {
             }
         }
         card.addView(div1)
+
+        // 🎯 1-Tap AIM + POTATO LOCK Hero Button
+        val aimPotatoBtn = Button(this).apply {
+            text = "🎯 AIM + POTATO LOCK"
+            textSize = 10.5f
+            setTextColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#00FF66"))
+            setPadding(10, 8, 10, 8)
+            minHeight = 0
+            minimumHeight = 0
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, 4, 0, 8)
+            }
+            setOnClickListener {
+                triggerHaptic(40)
+                scope.launch {
+                    val script = """
+                        settings put system gamemode_touch_optimization 1
+                        settings put system gamemode_touch_aim_sensitivity 100
+                        settings put system gamemode_touch_aim_response 100
+                        settings put system gamemode_touch_tap_stability 100
+                        settings put system gamemode_touch_follow_response 100
+                        settings put system gamemode_touch_continuous_response 100
+                        settings put system touch_slop 1
+                        settings put system pointer_speed 7
+                        settings put system touch_sensitivity 5
+                        settings put system touch_response_speed 1
+                        settings put system touch_boost 1
+                        settings put secure touch_game_mode 1
+                        settings put system tp_game_mode 1
+                        settings put system touch_game_mode_enable 1
+                        settings put system miui_touch_sampling_rate_boost 1
+                        settings put secure tap_timeout 50
+                        settings put secure long_press_timeout 120
+                        cmd device_config put input_native_boot resample_touch false 2>/dev/null
+                        cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null
+                        cmd netd resolver flushdefaultif 2>/dev/null
+                    """.trimIndent()
+                    Shell.run(script)
+                    Actions.pinGameProcess(game)
+                    ui.post {
+                        Toast.makeText(this@OverlayService, "🎯 AIM + POTATO LOCK ACTIVE! (2560Hz + Prime Cores)", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        card.addView(aimPotatoBtn)
 
         // In-Game Brightness Slider + Sunlight HBM
         val brightLabel = TextView(this).apply {

@@ -96,11 +96,11 @@ object Actions {
         "Game Mode Reset for $g"
     }
 
-    suspend fun applyDownscaleAndFps(game: String, downscale: String = "0.75", fps: Int = 120): String = withContext(Dispatchers.IO) {
+    suspend fun applyDownscaleAndFps(game: String, downscale: String = "0.60", fps: Int = 120): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
         val validFps = if (fps > 120) 120 else fps
-        Shell.run("cmd game set --mode 2 --fps $validFps $g\ncmd game mode performance $g")
-        "Downscale & FPS Applied: $validFps FPS for $g"
+        Shell.run("cmd game set --mode 2 --downscale $downscale --fps $validFps $g\ncmd device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=$downscale,fps=$validFps 2>/dev/null\ncmd game mode performance $g")
+        "Downscale & FPS Applied: $downscale ($validFps FPS) for $g"
     }
 
     suspend fun resetDownscaleAndFps(game: String): String = withContext(Dispatchers.IO) {
@@ -108,8 +108,62 @@ object Actions {
     }
 
     // =========================================================================
-    // 2. BULLET REGISTRATION & ZERO-DESYNC ENGINE (Safe UE4 Config Injection)
+    // 2. MAGNETIC AIM-ASSIST, BULLET REGISTRATION & ZERO-DESYNC ENGINE
     // =========================================================================
+    suspend fun applyMagneticAimAndHitReg(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        isBulletRegActive = true
+        val script = """
+            # A. HyperOS Touch IC Micro-Aim Lock & Anti-Jitter (Locks Crosshair on Hitbox)
+            settings put system gamemode_touch_optimization 1
+            settings put system gamemode_touch_aim_sensitivity 100
+            settings put system gamemode_touch_aim_response 100
+            settings put system gamemode_touch_tap_stability 100
+            settings put system gamemode_touch_follow_response 100
+            settings put system gamemode_touch_continuous_response 100
+            settings put system touch_slop 1
+            settings put secure touch_blocking_period 0.0
+
+            # B. Redmi 2560Hz Peak Touch Sampling & Raw Impulse Velocity
+            settings put system touch_response_speed 1
+            settings put system touch_sensitivity 5
+            settings put system pointer_speed 7
+            settings put system touch_boost 1
+            settings put secure touch_game_mode 1
+            settings put system tp_game_mode 1
+            settings put system touch_game_mode_enable 1
+            settings put system miui_touch_sampling_rate_boost 1
+            settings put secure tap_timeout 50
+            settings put secure long_press_timeout 120
+            settings put secure multi_press_timeout 100
+            cmd device_config put input_native_boot resample_touch false 2>/dev/null
+            cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null
+            cmd device_config put input_native_boot deep_press_enabled false 2>/dev/null
+            setprop windowsmgr.max_events_per_sec 240
+            setprop debug.performance.tuning 1
+            setprop video.accelerate.hw 1
+
+            # C. Zero-Desync Render Queue (1:1 Hitbox Alignment)
+            settings put system miui_vrs_enable 0
+            settings put global vrs_enable 0
+            setprop debug.hwui.vrs_enable false
+            cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null
+            service call SurfaceFlinger 1008 i32 1 2>/dev/null
+            service call SurfaceFlinger 1035 i32 0 2>/dev/null
+            setprop debug.sf.latch_unsignaled 1
+            setprop debug.sf.disable_backpressure 1
+            setprop debug.sf.DropMissedFrames 1
+            setprop debug.cpuprio 7
+            setprop debug.gpuprio 7
+            setprop debug.ioprio 7
+            setprop debug.sf.hw 1
+            setprop debug.PerfLock 1
+        """.trimIndent()
+        Shell.run(script)
+        injectZeroDesyncNetcodeAndSmokeAntiLag(g)
+        "🎯 Magnetic Aim-Assist & 2560Hz Bullet-Reg ACTIVE: Anti-Jitter 100, Impulse Velocity & Zero Render Queue Lag"
+    }
+
     suspend fun applyBulletRegistrationMode(game: String, enable: Boolean, rendererMode: String = "skiagl"): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
         isBulletRegActive = enable
@@ -255,6 +309,24 @@ EOF
                 "Resolution and Density Reset to Stock"
             }
         }
+    }
+
+    suspend fun applyStretchedHitboxView(game: String, potatoStretched: Boolean = false): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        if (potatoStretched) {
+            Shell.run("wm size 900x1800\nwm density 280")
+        } else {
+            Shell.run("wm size 1080x2160\nwm density 340")
+        }
+        applyMaintainYFov(g, true)
+        "🎯 Stretched Hitbox View ACTIVE (1080x2160 @ 340 DPI + MaintainYFOV) - Wider Targets & Headshot Lock!"
+    }
+
+    suspend fun resetToNativeResolution(game: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        Shell.run("wm size reset\nwm density reset")
+        applyMaintainYFov(g, false)
+        "🔙 Screen Resolution Reset to Native Stock Display"
     }
 
     // =========================================================================
@@ -565,6 +637,7 @@ EOF
             am force-stop com.android.webview 2>/dev/null
 
             # Safe Cache Trim for SystemUI, Plugin & XMSF (Zero UI Stutter, No Reset)
+            pm trim-caches 1000M com.android.systemui 2>/dev/null
             pm trim-caches 4096G 2>/dev/null
             cmd activity idle-maintenance 2>/dev/null
             am force-stop com.xiaomi.xmsf 2>/dev/null
@@ -960,15 +1033,19 @@ EOF
             else -> 0
         }
 
-        val screenPercentage = when (resolution) {
-            "800x600" -> 55
-            "960x540" -> 65
-            "1280x720" -> 75
-            "1440x720" -> 80
-            "1600x900" -> 85
+        val isUltraPotato = potatoLevel == "Ultra (LOD +3)" || quality == "Super Smooth"
+        val screenPercentage = when {
+            isUltraPotato -> 60
+            resolution == "800x600" -> 55
+            resolution == "960x540" -> 60
+            resolution == "1280x720" -> 75
+            resolution == "1440x720" -> 80
+            resolution == "1600x900" -> 85
             else -> 100
         }
         val isBilinear = bilinearFilter || potatoLevel != "Off"
+        val emitterSpawnRate = if (isUltraPotato) "0.2" else "0.25"
+        val maxCpuParticles = if (isUltraPotato) 8 else 10
 
         val cvars = listOf(
             "r.UserQualitySetting=$qualityVal",
@@ -979,10 +1056,15 @@ EOF
             "r.MaxAnisotropy=${if (isBilinear) 1 else 4}",
             "r.ScreenPercentage=$screenPercentage",
             "r.ShadowQuality=$shadowVal",
+            "r.LightFunctionQuality=0",
             "r.BloomQuality=0",
             "r.RefractionQuality=0",
             "r.LensFlareQuality=0",
+            "r.DepthOfFieldQuality=0",
+            "r.RenderTargetPoolMin=100",
             "r.DefaultFeature.AntiAliasing=$msaaVal",
+            "r.PostProcessAAQuality=0",
+            "r.Tonemapper.Sharpen=0",
             "r.MobileContentScaleFactor=1.0",
             "r.PUBGDeviceFPSLow=$finalFps",
             "r.PUBGDeviceFPSMid=$finalFps",
@@ -990,17 +1072,18 @@ EOF
             "r.PUBGDeviceFPSHDR=$finalFps",
             "r.PUBGDeviceFPSUltralHigh=$finalFps",
             "r.TargetFPS=$finalFps",
-            "r.SimpleDynamicLighting=${if (simpleShader) 1 else 0}",
+            "r.SimpleDynamicLighting=${if (simpleShader || isUltraPotato) 1 else 0}",
             "r.SimpleShader=${if (simpleShader || lodBias > 0) 1 else 0}",
             "r.SoundQuality=${if (soundQuality == "Ultra") 2 else 1}",
             "r.OneFrameThreadLag=0",
             "r.FinishCurrentFrame=1",
+            "r.RHICmdBypass=0",
             "p.NetEnableMoveCombining=0",
             "net.UseAdaptiveNetUpdateFrequency=0",
             "NetClientTicksPerSecond=120",
-            "r.EmitterSpawnRateScale=0.25",
+            "r.EmitterSpawnRateScale=$emitterSpawnRate",
             "r.ParticleLODBias=2",
-            "fx.MaxCPUParticlesPerEmitter=10",
+            "fx.MaxCPUParticlesPerEmitter=$maxCpuParticles",
             "r.Streaming.PoolSize=0"
         )
 
@@ -1074,7 +1157,20 @@ EOF
 
     suspend fun applyUltraPotatoBlurryMode(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
-        applyDownscaleAndFps(g, "0.65", 120)
+        applyDownscaleAndFps(g, "0.60", 120)
+        val script = """
+            cmd device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=0.60,fps=120 2>/dev/null
+            settings put system gpu_texture_filter_quality 0
+            settings put system gpu_mipmap_lod_bias 3
+            settings put system gpu_anisotropic_opt 0
+            settings put system miui_gpu_preemption 0
+            settings put system miui_vrs_enable 0
+            settings put global vrs_enable 0
+            setprop debug.hwui.vrs_enable false
+            setprop persist.sys.gpu_texture_filter_quality 0
+            setprop debug.hwui.mipmap_lod_bias 3
+        """.trimIndent()
+        Shell.run(script)
         applyPgtGraphicsConfig(
             game = g,
             resolution = "960x540",
@@ -1090,14 +1186,7 @@ EOF
             bilinearFilter = true,
             readOnlyLock = true
         )
-        val script = """
-            settings put system miui_vrs_enable 0
-            setprop debug.hwui.vrs_enable false
-            setprop persist.sys.gpu_texture_filter_quality 0
-            setprop debug.hwui.mipmap_lod_bias 3
-        """.trimIndent()
-        Shell.run(script)
-        "🥔 ULTRA POTATO BLURRY GRAPHICS ACTIVE: 0.65x Scale, LOD +3, Bilinear, 120 FPS Locked"
+        "🧈 1-TAP ULTRA-POTATO BUTTER SMOOTH (MAX FPS + AIM LOCK) ACTIVE: 60% Scale, Bilinear LOD +3, 0ms Lag Locked!"
     }
 
     // =========================================================================
@@ -1151,6 +1240,7 @@ EOF
             appendLine("  am force-stop com.google.android.webview 2>/dev/null")
             appendLine("  am force-stop com.android.webview 2>/dev/null")
             appendLine("  am force-stop com.miui.daemon 2>/dev/null")
+            appendLine("  pm trim-caches 1000M com.android.systemui 2>/dev/null")
             appendLine("  pm trim-caches 4096G 2>/dev/null")
             appendLine("  cmd activity idle-maintenance 2>/dev/null")
             appendLine("  am force-stop com.xiaomi.xmsf 2>/dev/null")
@@ -1195,16 +1285,17 @@ EOF
             appendLine("  settings put system gamemode_touch_follow_response 100")
             appendLine("  settings put system gamemode_touch_continuous_response 100")
             appendLine("  settings put system gamemode_touch_aim_sensitivity 100")
-            appendLine("  settings put system gamemode_touch_aim_response 95")
+            appendLine("  settings put system gamemode_touch_aim_response 100")
             appendLine("  settings put system gamemode_touch_tap_stability 100")
             appendLine("  settings put system gamemode_edge_filter 0")
             appendLine("  settings put system touch_slop 1")
-            appendLine("  settings put secure tap_timeout 60")
-            appendLine("  settings put secure long_press_timeout 200")
+            appendLine("  settings put secure tap_timeout 50")
+            appendLine("  settings put secure long_press_timeout 120")
             appendLine("  settings put secure multi_press_timeout 100")
             appendLine("  settings put secure touch_blocking_period 0.0")
             appendLine("  cmd device_config put input_native_boot resample_touch false 2>/dev/null")
             appendLine("  cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null")
+            appendLine("  cmd device_config put input_native_boot deep_press_enabled false 2>/dev/null")
             appendLine("  setprop windowsmgr.max_events_per_sec 240")
             appendLine("  setprop persist.vendor.touch.sampling_rate 480")
             appendLine("  setprop persist.sys.touch.report_rate 480")

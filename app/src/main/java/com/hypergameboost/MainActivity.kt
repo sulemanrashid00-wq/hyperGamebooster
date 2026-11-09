@@ -316,6 +316,11 @@ fun App() {
     // Mini App
     var miniAppPkg by remember { mutableStateOf("com.whatsapp") }
 
+    // v8.0 Magnetic Aim & Potato State
+    var downscaleFactor by remember { mutableStateOf("0.60") }
+    var magneticAimActive by remember { mutableStateOf(true) }
+    var stretchedHitboxActive by remember { mutableStateOf(false) }
+
     val sp = remember { ctx.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE) }
 
     fun loadProfileForGame(game: String) {
@@ -334,6 +339,11 @@ fun App() {
         bulletRegActive = sp.getBoolean("bullet_reg_$game", true)
         rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
         maintainYFov = sp.getBoolean("wide_fov_$game", false)
+        downscaleFactor = sp.getString("ds_$game", "0.60") ?: "0.60"
+        selectedTouchPreset = sp.getInt("touch_preset_$game", 1)
+        magneticAimActive = sp.getBoolean("magnetic_aim_$game", true)
+        stretchedHitboxActive = sp.getBoolean("stretched_hitbox_$game", false)
+        hardwareRefreshRate = sp.getFloat("refresh_rate_$game", 120.0f).toDouble()
         CrosshairSettings.magnifierScale = zoomScale
     }
 
@@ -354,6 +364,11 @@ fun App() {
             .putBoolean("bullet_reg_$game", bulletRegActive)
             .putString("renderer_$game", rendererMode)
             .putBoolean("wide_fov_$game", maintainYFov)
+            .putString("ds_$game", downscaleFactor)
+            .putInt("touch_preset_$game", selectedTouchPreset)
+            .putBoolean("magnetic_aim_$game", magneticAimActive)
+            .putBoolean("stretched_hitbox_$game", stretchedHitboxActive)
+            .putFloat("refresh_rate_$game", hardwareRefreshRate.toFloat())
             .apply()
     }
 
@@ -455,7 +470,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v7.0 APEX",
+                        "v8.0 MAGNET & POTATO",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -581,6 +596,25 @@ fun App() {
                             }
 
                             Button(
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    magneticAimActive = true
+                                    bulletRegActive = true
+                                    saveProfileForGame(selectedGame)
+                                    statusLog = "🎯 Activating Magnetic Aim-Assist & 2560Hz Bullet-Reg..."
+                                    scope.launch {
+                                        val res = Actions.applyMagneticAimAndHitReg(selectedGame)
+                                        statusLog = "✅ $res"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("🎯 ACTIVATE MAGNETIC AIM-ASSIST & INSTANT BULLET-REG", color = Color.Black, fontSize = 11.5.sp)
+                            }
+
+                            Button(
                                 modifier = Modifier.fillMaxWidth().height(50.dp),
                                 onClick = {
                                     val now = System.currentTimeMillis()
@@ -595,6 +629,10 @@ fun App() {
                                         val t0 = System.currentTimeMillis()
                                         val res = try {
                                             Actions.applyUnrestrictedPowerPolicy(selectedGame)
+                                            Actions.clearPowerKeeperJoyoseWebViewData()
+                                            if (magneticAimActive) {
+                                                Actions.applyMagneticAimAndHitReg(selectedGame)
+                                            }
                                             Actions.applyPgtGraphicsConfig(
                                                 game = selectedGame,
                                                 resolution = pgtRes,
@@ -644,6 +682,10 @@ fun App() {
                                     scope.launch {
                                         try {
                                             Actions.applyUnrestrictedPowerPolicy(selectedGame)
+                                            Actions.clearPowerKeeperJoyoseWebViewData()
+                                            if (magneticAimActive) {
+                                                Actions.applyMagneticAimAndHitReg(selectedGame)
+                                            }
                                             Actions.applyPgtGraphicsConfig(
                                                 game = selectedGame,
                                                 resolution = pgtRes,
@@ -938,16 +980,47 @@ fun App() {
                         )
                     }
 
-                    SectionCard("Esports Stretched Hitbox & Aspect Downscaler", "Wider character models for easy headshots") {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(4) } }) {
-                                Text("1080x2160 Stretched", fontSize = 10.sp)
-                            }
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(5) } }) {
-                                Text("1080x1920 Ultra Wide", fontSize = 10.sp)
-                            }
+                    SectionCard("🎯 STRETCHED HITBOX VIEW (Wider Enemies & Headshot Magnet)", "Wider character models reduce horizontal angular velocity for easier spray tracking") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            enabled = isReady,
+                            onClick = {
+                                stretchedHitboxActive = true
+                                maintainYFov = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyStretchedHitboxView(selectedGame, false) }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("🎯 APPLY STRETCHED HITBOX VIEW (Wider Enemies + Easy Headshots)", color = Color.Black, fontSize = 11.sp)
                         }
+
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            enabled = isReady,
+                            onClick = {
+                                stretchedHitboxActive = false
+                                maintainYFov = false
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.resetToNativeResolution(selectedGame) }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2836)),
+                            border = BorderStroke(1.dp, Color(0xFF546E7A)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("🔙 Reset to Native 1.5K Resolution", color = Color(0xFFECEFF1), fontSize = 11.sp)
+                        }
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = {
+                                stretchedHitboxActive = true
+                                maintainYFov = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyStretchedHitboxView(selectedGame, true) }
+                            }) {
+                                Text("Potato Stretched", fontSize = 10.sp)
+                            }
                             OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(1) } }) {
                                 Text("900p Pro", fontSize = 10.sp)
                             }
@@ -958,14 +1031,25 @@ fun App() {
                                 Text("720p Potato", fontSize = 10.sp)
                             }
                         }
-                        OutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(0) } }) {
-                            Text("Reset Screen Resolution to Stock")
-                        }
                     }
 
                     SectionCard("PGT+ (v0.25.9) Config & Extension Injector", "Full interactive controls & sensitivity protection") {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF261D10),
+                            border = BorderStroke(1.dp, Color(0xFFFFD600)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "🧈 Ultra-Potato 60% Scale + Bilinear LOD +3 + 0ms Frame-Lag Locked (Read-Only)!",
+                                modifier = Modifier.padding(10.dp),
+                                color = Color(0xFFFFD600),
+                                fontSize = 11.sp
+                            )
+                        }
+
                         Button(
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
                             enabled = isReady,
                             onClick = {
                                 pgtRes = "960x540"
@@ -976,13 +1060,14 @@ fun App() {
                                 pgtShadow = false
                                 pgtMsaa = false
                                 pgtBilinear = true
+                                downscaleFactor = "0.60"
                                 saveProfileForGame(selectedGame)
                                 exec { Actions.applyUltraPotatoBlurryMode(selectedGame) }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD84315)),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00)),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("🥔 1-TAP ULTRA POTATO BLURRY GRAPHICS (MAX 120 FPS + ZERO GPU HEAT)", color = Color.White, fontSize = 10.5.sp)
+                            Text("🧈 1-TAP ULTRA-POTATO BUTTER SMOOTH (MAX FPS + AIM LOCK)", color = Color.White, fontSize = 11.sp)
                         }
 
                         Spacer(Modifier.height(8.dp))
@@ -1164,6 +1249,25 @@ fun App() {
                 // TAB 2: TOUCH / AUDIO / AIRTRIGGERS
                 // =============================================================
                 2 -> {
+                    Button(
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        onClick = {
+                            triggerVibe(ctx)
+                            magneticAimActive = true
+                            bulletRegActive = true
+                            saveProfileForGame(selectedGame)
+                            statusLog = "🎯 Activating Magnetic Aim-Assist & 2560Hz Bullet-Reg..."
+                            scope.launch {
+                                val res = Actions.applyMagneticAimAndHitReg(selectedGame)
+                                statusLog = "✅ $res"
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("🎯 ACTIVATE MAGNETIC AIM-ASSIST & INSTANT BULLET-REG", color = Color.Black, fontSize = 11.5.sp)
+                    }
+
                     SectionCard("🎯 3 1-TAP TOUCH & RECOIL PRESETS", "Instant hardware sampling & filter profiles") {
                         Row(
                             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -1173,6 +1277,7 @@ fun App() {
                                 selected = selectedTouchPreset == 1,
                                 onClick = {
                                     selectedTouchPreset = 1
+                                    saveProfileForGame(selectedGame)
                                     exec { Actions.applyTouchPreset(1) }
                                 },
                                 label = { Text("🔥 Preset 1: Jiggle God (480Hz)", fontSize = 11.sp) }
@@ -1181,6 +1286,7 @@ fun App() {
                                 selected = selectedTouchPreset == 2,
                                 onClick = {
                                     selectedTouchPreset = 2
+                                    saveProfileForGame(selectedGame)
                                     exec { Actions.applyTouchPreset(2) }
                                 },
                                 label = { Text("🎯 Preset 2: Laser AR (400Hz Gyro)", fontSize = 11.sp) }
@@ -1189,6 +1295,7 @@ fun App() {
                                 selected = selectedTouchPreset == 3,
                                 onClick = {
                                     selectedTouchPreset = 3
+                                    saveProfileForGame(selectedGame)
                                     exec { Actions.applyTouchPreset(3) }
                                 },
                                 label = { Text("⚡ Preset 3: DMR Sniper (40ms)", fontSize = 11.sp) }
@@ -1197,6 +1304,7 @@ fun App() {
                                 selected = selectedTouchPreset == 0,
                                 onClick = {
                                     selectedTouchPreset = 0
+                                    saveProfileForGame(selectedGame)
                                     exec { Actions.applyTouchPreset(0) }
                                 },
                                 label = { Text("Reset", fontSize = 11.sp) }

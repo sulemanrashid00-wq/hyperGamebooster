@@ -34,8 +34,8 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster Smart Watchdog")
-            .setContentText("Monitoring $game (Auto-Boost & Auto-Restore Active)")
+            .setContentTitle("HyperGameBooster v8.0 Watchdog")
+            .setContentText("Monitoring $game (Magnetic Aim & 120 FPS Lock Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -48,6 +48,7 @@ class AutoService : Service() {
 
         job?.cancel()
         job = CoroutineScope(Dispatchers.IO).launch {
+            Actions.clearPowerKeeperJoyoseWebViewData()
             Actions.restrictPowerKeeperAndJoyose()
             runSmartWatchdog(game)
         }
@@ -66,15 +67,16 @@ class AutoService : Service() {
                 if (!wasGameRunning) {
                     wasGameRunning = true
 
-                    // 1. Force Unrestricted Battery & Background Power + Full Esports Mode
+                    // 1. Force Unrestricted Battery & Safe UI/Joyose/WebView Data Cleanse
                     Actions.applyUnrestrictedPowerPolicy(game)
+                    Actions.clearPowerKeeperJoyoseWebViewData()
                     Actions.esportsMode(game, packageName)
                     NativeTools.startAdpfSession(this@AutoService, 8333333L)
                     NativeTools.setWifiLowLatency(this@AutoService, true)
 
                     // 2. Read Per-Game SharedPreferences & apply customized profile + Persistent GFX
                     val sp = getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE)
-                    val ds = sp.getString("ds_$game", "0.75") ?: "0.75"
+                    val ds = sp.getString("ds_$game", "0.60") ?: "0.60"
                     val fps = sp.getInt("fps_$game", 120)
                     val res = sp.getString("res_$game", "1280x720") ?: "1280x720"
                     val qual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
@@ -89,7 +91,22 @@ class AutoService : Service() {
                     val bulletReg = sp.getBoolean("bullet_reg_$game", true)
                     val rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
                     val wideFov = sp.getBoolean("wide_fov_$game", false)
+                    val touchPreset = sp.getInt("touch_preset_$game", 1)
+                    val magneticAim = sp.getBoolean("magnetic_aim_$game", true)
+                    val stretchedHitbox = sp.getBoolean("stretched_hitbox_$game", false)
+                    val refreshRate = sp.getFloat("refresh_rate_$game", 120.0f).toDouble()
+                    val bilinearFilter = sp.getBoolean("bilinear_$game", false)
 
+                    // Apply hardware refresh rate & touch engine
+                    Actions.setHardwareRefreshRate(refreshRate)
+                    if (magneticAim) {
+                        Actions.applyMagneticAimAndHitReg(game)
+                    } else if (bulletReg) {
+                        Actions.applyBulletRegistrationMode(game, true, rendererMode)
+                    }
+                    Actions.applyTouchPreset(touchPreset)
+
+                    // Apply PGT Graphics & Downscaling
                     Actions.applyPgtGraphicsConfig(
                         game = game,
                         resolution = res,
@@ -101,6 +118,7 @@ class AutoService : Service() {
                         msaaEnabled = msaa,
                         soundQuality = sound,
                         gpuExtension = gpuExt,
+                        bilinearFilter = bilinearFilter,
                         readOnlyLock = true
                     )
 
@@ -109,10 +127,9 @@ class AutoService : Service() {
                     if (bypassCharge) {
                         Actions.setBypassCharging(true)
                     }
-                    if (bulletReg) {
-                        Actions.applyBulletRegistrationMode(game, true, rendererMode)
-                    }
-                    if (wideFov) {
+                    if (stretchedHitbox) {
+                        Actions.applyStretchedHitboxView(game, false)
+                    } else if (wideFov) {
                         Actions.applyMaintainYFov(game, true)
                     }
 
@@ -148,6 +165,6 @@ class AutoService : Service() {
 
     companion object {
         const val EXTRA_GAME = "game"
-        private const val CHANNEL = "auto_watchdog_v6"
+        private const val CHANNEL = "auto_watchdog_v8"
     }
 }
