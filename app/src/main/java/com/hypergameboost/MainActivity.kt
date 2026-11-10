@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.MotionEvent
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -412,14 +413,19 @@ fun App() {
         }
     }
 
-    // Ultra-Fast Non-Blocking Coroutine Executor with Instant Visual Feedback
+    // Ultra-Fast Non-Blocking Coroutine Executor with Instant Visual Feedback & Toast
     fun exec(block: suspend () -> String) {
         statusLog = "⚡ Executing action..."
+        triggerVibe(ctx)
         scope.launch {
             statusLog = try {
-                block()
+                val res = block()
+                Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                res
             } catch (e: Throwable) {
-                "ERR: ${e.message}"
+                val err = "ERR: ${e.message}"
+                Toast.makeText(ctx, err, Toast.LENGTH_SHORT).show()
+                err
             }
         }
     }
@@ -486,7 +492,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v10.0 REDMAGIC & IPAD GOD",
+                        "v10.1 STABLE GOD-TIER",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),

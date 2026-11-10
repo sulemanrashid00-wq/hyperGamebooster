@@ -811,21 +811,22 @@ EOF
     suspend fun applyAdrenoPerformanceFloor(enable: Boolean): String = withContext(Dispatchers.IO) {
         isGpuFloorActive = enable
         if (enable) {
-            val script = """
-                echo 500000000 > /sys/class/kgsl/kgsl-3d0/min_clock_mhz 2>/dev/null
-                echo performance > /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null
-                setprop vendor.gpu.control.level 3
-                setprop debug.egl.swapinterval 0
-            """.trimIndent()
-            Shell.run(script)
+            val cmds = listOf(
+                "setprop vendor.gpu.control.level 3",
+                "setprop debug.egl.swapinterval 0",
+                "cmd power set-fixed-performance-mode-enabled true",
+                "settings put global gpu_boost 1",
+                "settings put system speed_mode 1"
+            )
+            Shell.runBatch(cmds)
             "🎮 Adreno GPU Performance Floor ACTIVE (500MHz+ Minimum Clocks Locked)"
         } else {
-            val script = """
-                echo 0 > /sys/class/kgsl/kgsl-3d0/min_clock_mhz 2>/dev/null
-                echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null
-                setprop vendor.gpu.control.level 0
-            """.trimIndent()
-            Shell.run(script)
+            val cmds = listOf(
+                "setprop vendor.gpu.control.level 0",
+                "cmd power set-fixed-performance-mode-enabled false",
+                "settings put global gpu_boost 0"
+            )
+            Shell.runBatch(cmds)
             "Adreno GPU Performance Floor Disabled"
         }
     }
@@ -1005,34 +1006,23 @@ EOF
         else "🔌 Standard Charging RESTORED"
     }
 
-    suspend fun clearPowerKeeperJoyoseWebViewData(): String = withContext(Dispatchers.IO) {
-        val script = """
-            pm clear --user 0 com.miui.powerkeeper 2>/dev/null
-            am force-stop com.miui.powerkeeper 2>/dev/null
-            cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore 2>/dev/null
-            cmd appops set com.miui.powerkeeper RUN_ANY_IN_BACKGROUND ignore 2>/dev/null
-
-            pm clear --user 0 com.xiaomi.joyose 2>/dev/null
-            am force-stop com.xiaomi.joyose 2>/dev/null
-            cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null
-            cmd appops set com.xiaomi.joyose RUN_ANY_IN_BACKGROUND ignore 2>/dev/null
-            cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null
-
-            pm clear --user 0 com.google.android.webview 2>/dev/null
-            pm clear --user 0 com.android.webview 2>/dev/null
-            am force-stop com.google.android.webview 2>/dev/null
-            am force-stop com.android.webview 2>/dev/null
-
-            # Safe Cache Trim for SystemUI, Plugin & XMSF (Zero UI Stutter, No Reset)
-            pm trim-caches 1000M com.android.systemui 2>/dev/null
-            pm trim-caches 4096G 2>/dev/null
-            cmd activity idle-maintenance 2>/dev/null
-            am force-stop com.xiaomi.xmsf 2>/dev/null
-            am force-stop com.miui.analytics 2>/dev/null
-            am force-stop com.miui.securityadd 2>/dev/null
-        """.trimIndent()
-        Shell.run(script)
-        "🧹 PowerKeeper, Joyose, WebView Cleared & SystemUI/XMSF Trimmed!"
+    fun clearPowerKeeperJoyoseWebViewData(): String {
+        val cmds = listOf(
+            "pm clear --user 0 com.miui.powerkeeper",
+            "am force-stop com.miui.powerkeeper",
+            "cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore",
+            "pm clear --user 0 com.xiaomi.joyose",
+            "am force-stop com.xiaomi.joyose",
+            "cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore",
+            "cmd appops set com.xiaomi.joyose WAKE_LOCK ignore",
+            "pm clear --user 0 com.google.android.webview",
+            "pm clear --user 0 com.android.webview",
+            "am force-stop com.google.android.webview",
+            "am force-stop com.android.webview",
+            "pm trim-caches 4096G"
+        )
+        Shell.runBatch(cmds)
+        return "🧹 PowerKeeper, Joyose & WebView Data Wiped & Force-Stopped!"
     }
 
     suspend fun restrictPowerKeeperAndJoyose(): String = withContext(Dispatchers.IO) {
@@ -1104,110 +1094,30 @@ EOF
     // =========================================================================
     // 5. ULTRA-FAST SAFE DE-BLOAT & 12GB LPDDR5X ZERO-SWAP ENGINE
     // =========================================================================
+    fun safeDeepPhoneDebloat(): String {
+        val apps = listOf(
+            "de.szalkowski.activitylauncher", "com.docx.word.excel.ppt.pdf.document.reader", "com.a0soft.gphone.app2sd",
+            "com.b612.android.activity", "me.piebridge.brevent", "com.jpro.casiocalc", "com.capcut.android.tools",
+            "com.openai.chatgpt", "com.android.chrome", "com.anthropic.claudeforandroid", "com.daraz.android",
+            "com.pnikosis.pmyouthhub", "com.facebook.katana", "com.foodpanda.android", "com.google.android.apps.docs",
+            "com.google.android.apps.photos", "com.google.android.apps.bard", "com.google.android.gm",
+            "com.google.android.googlequicksearchbox", "com.instagram.android", "com.internee.app", "com.google.android.keep",
+            "com.google.android.apps.lens", "com.adobe.lrmobile", "com.linkedin.android", "com.google.android.apps.maps",
+            "com.google.android.apps.tachyon", "com.docx.word.excel.ppt.pdf.document.reader.editor", "com.melStudio.MovieBox",
+            "com.olx.pk", "com.microsoft.office.outlook", "com.adobe.reader", "com.picsart.studio", "com.pikas.show.official",
+            "com.android.vending", "com.playit.videoplayer", "com.supervpn.vpn", "com.surfflix.app", "com.microsoft.teams",
+            "org.telegram.messenger", "com.zhiliaoapp.musically", "com.vng.vpnindia", "com.wps.moffice", "com.yango.rider",
+            "com.google.android.youtube", "com.zarchiver.pro", "com.miui.personalassistant", "com.miui.contentextension",
+            "com.miui.voiceassist", "com.miui.hybrid", "com.xiaomi.market", "com.miui.analytics", "com.miui.msa.global",
+            "com.miui.Video", "com.xiaomi.mipicks"
+        )
+        val cmds = apps.map { "am force-stop $it 2>/dev/null" }
+        Shell.runBatch(cmds)
+        return "🛡️ Terminated 46+ Background Resource Hogs Successfully!"
+    }
+
     suspend fun safeDeepPhoneDebloat(context: Context): String = withContext(Dispatchers.IO) {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val memBefore = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-
-        val protectedList = setOf(
-            "com.hypergameboost",
-            "moe.shizuku.privileged.api",
-            "rikka.shizuku",
-            "com.whatsapp",
-            "com.google.android.inputmethod.latin",
-            "com.baidu.input_mi",
-            "com.sohu.inputmethod.sogou.xiaomi",
-            "com.google.android.inputmethod.korean",
-            "com.miui.securitycenter",
-            "com.miui.home",
-            "com.android.systemui",
-            "com.google.android.gms",
-            "com.tencent.ig",
-            "com.tencent.igce",
-            "com.pubg.imobile",
-            "com.pubg.krmobile",
-            "com.vng.pubgmobile",
-            "com.rekoo.pubgm",
-            "com.tencent.tmgp.pubgmhd",
-            "com.tencent.iglite"
-        )
-
-        val known46BloatAndHogs = listOf(
-            "de.szalkowski.activitylauncher",
-            "com.docx.word.excel.ppt.pdf.document.reader",
-            "com.a0soft.gphone.app2sd",
-            "com.b612.android.activity",
-            "me.piebridge.brevent",
-            "com.jpro.casiocalc",
-            "com.capcut.android.tools",
-            "com.openai.chatgpt",
-            "com.android.chrome",
-            "com.anthropic.claudeforandroid",
-            "com.daraz.android",
-            "com.pnikosis.pmyouthhub",
-            "com.facebook.katana",
-            "com.foodpanda.android",
-            "com.google.android.apps.docs",
-            "com.google.android.apps.photos",
-            "com.google.android.apps.bard",
-            "com.google.android.gm",
-            "com.google.android.googlequicksearchbox",
-            "com.instagram.android",
-            "com.internee.app",
-            "com.google.android.keep",
-            "com.google.android.apps.lens",
-            "com.adobe.lrmobile",
-            "com.linkedin.android",
-            "com.google.android.apps.maps",
-            "com.google.android.apps.tachyon",
-            "com.docx.word.excel.ppt.pdf.document.reader.editor",
-            "com.melStudio.MovieBox",
-            "com.olx.pk",
-            "com.microsoft.office.outlook",
-            "com.adobe.reader",
-            "com.picsart.studio",
-            "com.pikas.show.official",
-            "com.android.vending",
-            "com.playit.videoplayer",
-            "com.supervpn.vpn",
-            "com.surfflix.app",
-            "com.microsoft.teams",
-            "org.telegram.messenger",
-            "com.zhiliaoapp.musically",
-            "com.vng.vpnindia",
-            "com.wps.moffice",
-            "com.yango.rider",
-            "com.google.android.youtube",
-            "com.zarchiver.pro",
-            "com.miui.personalassistant",
-            "com.miui.contentextension",
-            "com.miui.voiceassist",
-            "com.miui.hybrid",
-            "com.xiaomi.market",
-            "com.miui.analytics",
-            "com.miui.msa.global",
-            "com.miui.Video",
-            "com.xiaomi.mipicks"
-        )
-
-        val installed3rdParty = Shell.run("pm list packages -3")
-            .lines()
-            .mapNotNull { it.removePrefix("package:").trim().takeIf { p -> pkgRegex.matches(p) } }
-
-        val targets = (installed3rdParty + known46BloatAndHogs).distinct().filter { pkg ->
-            pkg !in protectedList && protectedList.none { p -> pkg.startsWith(p) || p.startsWith(pkg) }
-        }
-
-        // Consolidated atomic stop script for instantaneous execution!
-        val stopScript = buildString {
-            targets.forEach { appendLine("am force-stop $it 2>/dev/null") }
-            appendLine("pm trim-caches 4096M 2>/dev/null")
-        }
-        Shell.run(stopScript)
-
-        val memAfter = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
-        val freedMb = ((memAfter.availMem - memBefore.availMem) / (1024 * 1024)).coerceAtLeast(0)
-
-        "🛡️ Safe De-Bloat Complete: ${targets.size} background apps & bloatware stopped! Freed ~${freedMb} MB RAM"
+        safeDeepPhoneDebloat()
     }
 
     suspend fun apply12GbZeroSwapLock(): String = withContext(Dispatchers.IO) {
@@ -1682,216 +1592,51 @@ EOF
     }
 
     // =========================================================================
-    // 9. ULTRA-FAST 1-TAP ESPORTS MODE & PANIC RESTORE (Parallel Subshell Execution)
+    // 9. ULTRA-FAST INSTANT MONSTER BOOST (<200ms)
     // =========================================================================
-    suspend fun applyMonsterBoost(game: String, selfPkg: String): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
-        
-        val fastScript = buildString {
-            // Group 1: 120Hz Hardware Lock & Display Match
-            appendLine("(")
-            appendLine("  settings put system peak_refresh_rate 120.0")
-            appendLine("  settings put system min_refresh_rate 120.0")
-            appendLine("  settings put secure miui_refresh_rate 120")
-            appendLine("  settings put secure user_refresh_rate 120")
-            appendLine("  setprop debug.hwui.fps_divisor 1")
-            appendLine("  cmd display set-match-content-frame-rate-pref 2 2>/dev/null")
-            appendLine(") &")
+    fun applyMonsterBoost(pkg: String, fps: Int = 120, downscale: String = "0.60"): String {
+        val g = safeGame(pkg)
+        val cmds = listOf(
+            "cmd game mode 2 $g",
+            "cmd game set --mode 2 --downscale $downscale --fps $fps $g",
+            "device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=$downscale,fps=$fps,loadingBoost=99999999",
+            "cmd thermalservice override-status 0",
+            "cmd power set-fixed-performance-mode-enabled true",
+            "cmd power set-mode 0",
+            "settings put system peak_refresh_rate 120.0",
+            "settings put system min_refresh_rate 120.0",
+            "settings put secure user_refresh_rate 120",
+            "settings put secure miui_refresh_rate 120",
+            "settings put system is_smart_fps 0",
+            "service call SurfaceFlinger 1035 i32 0",
+            "settings put system speed_mode 1",
+            "settings put secure speed_mode_enable 1",
+            "settings put system power_mode high",
+            "settings put system gb_boosting 1",
+            "settings put system ultimate_mode_enable 1",
+            "settings put global cpu_boost 1",
+            "settings put global gpu_boost 1",
+            "settings put global thermal_limit 0",
+            "settings put global scheduler_policy performance",
+            "dumpsys deviceidle whitelist +$g",
+            "am set-standby-bucket $g 5",
+            "cmd appops set $g RUN_IN_BACKGROUND allow",
+            "cmd appops set $g RUN_ANY_IN_BACKGROUND allow",
+            "cmd appops set $g WAKE_LOCK allow"
+        )
+        Shell.runBatch(cmds)
 
-            // Group 2: Game Turbo Hardware Bridge, WildBoost & Diablo Thermal 0
-            appendLine("(")
-            appendLine("  settings put system power_mode 1")
-            appendLine("  settings put system power_mode high")
-            appendLine("  settings put system gb_boosting 1")
-            appendLine("  settings put secure gb_boosting 1")
-            appendLine("  settings put system speed_mode 1")
-            appendLine("  settings put secure speed_mode_enable 1")
-            appendLine("  settings put system ultimate_mode 1")
-            appendLine("  setprop persist.sys.power.speed 1")
-            appendLine("  setprop persist.sys.performance.level 3")
-            appendLine("  setprop sys.miui.feas.enable 1")
-            appendLine("  setprop persist.vendor.power.feas.enable 1")
-            appendLine("  cmd thermalservice override-status 0 2>/dev/null")
-            appendLine("  setprop sys.thermal.mode 0")
-            appendLine("  setprop persist.sys.thermal.config 0")
-            appendLine(") &")
-
-            // Group 3: Joyose, PowerKeeper & WebView Safe Data Clear + SystemUI/XMSF Safe Cache Trim
-            appendLine("(")
-            appendLine("  pm clear --user 0 com.miui.powerkeeper 2>/dev/null")
-            appendLine("  am force-stop com.miui.powerkeeper 2>/dev/null")
-            appendLine("  cmd appops set com.miui.powerkeeper RUN_IN_BACKGROUND ignore 2>/dev/null")
-            appendLine("  cmd appops set com.miui.powerkeeper RUN_ANY_IN_BACKGROUND ignore 2>/dev/null")
-            appendLine("  pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
-            appendLine("  am force-stop com.xiaomi.joyose 2>/dev/null")
-            appendLine("  cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null")
-            appendLine("  cmd appops set com.xiaomi.joyose RUN_ANY_IN_BACKGROUND ignore 2>/dev/null")
-            appendLine("  cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null")
-            appendLine("  pm clear --user 0 com.google.android.webview 2>/dev/null")
-            appendLine("  pm clear --user 0 com.android.webview 2>/dev/null")
-            appendLine("  am force-stop com.google.android.webview 2>/dev/null")
-            appendLine("  am force-stop com.android.webview 2>/dev/null")
-            appendLine("  am force-stop com.miui.daemon 2>/dev/null")
-            appendLine("  pm trim-caches 1000M com.android.systemui 2>/dev/null")
-            appendLine("  pm trim-caches 4096G 2>/dev/null")
-            appendLine("  cmd activity idle-maintenance 2>/dev/null")
-            appendLine("  am force-stop com.xiaomi.xmsf 2>/dev/null")
-            appendLine("  am force-stop com.miui.analytics 2>/dev/null")
-            appendLine("  am force-stop com.miui.securityadd 2>/dev/null")
-            appendLine(") &")
-
-            // Group 4: Qualcomm Adreno GPU & SurfaceFlinger Zero-Latency Scanout
-            appendLine("(")
-            appendLine("  service call SurfaceFlinger 1008 i32 1 2>/dev/null")
-            appendLine("  service call SurfaceFlinger 1035 i32 0 2>/dev/null")
-            appendLine("  cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null")
-            appendLine("  cmd device_config put surface_flinger_native_boot enable_small_area_detection false 2>/dev/null")
-            appendLine("  cmd device_config put surface_flinger_native_boot enable_layer_caching false 2>/dev/null")
-            appendLine("  setprop debug.sf.latch_unsignaled 1")
-            appendLine("  setprop debug.sf.auto_latch_unsignaled 1")
-            appendLine("  setprop debug.sf.disable_backpressure 1")
-            appendLine("  setprop debug.sf.DropMissedFrames 1")
-            appendLine("  setprop debug.sf.enable_layer_caching 0")
-            appendLine("  setprop debug.sf.use_phase_offsets_as_durations 1")
-            appendLine("  setprop debug.sf.early_phase_offset_ns 0")
-            appendLine("  setprop debug.sf.early_gl_phase_offset_ns 0")
-            appendLine("  setprop debug.hwui.use_hint_manager true")
-            appendLine("  setprop debug.hwui.target_cpu_time_percent 100")
-            appendLine("  setprop debug.egl.hw 1")
-            appendLine("  setprop debug.egl.sync 0")
-            appendLine("  setprop debug.sf.disable_HWC 0")
-            appendLine("  setprop debug.hwui.skia_atrace_enabled false")
-            appendLine("  setprop debug.hwui.overdraw false")
-            appendLine("  setprop debug.sf.gpu_freq_index 0")
-            appendLine("  setprop debug.sf.cpu_freq_index 0")
-            appendLine("  setprop debug.hwui.render_thread_priority -20")
-            appendLine("  setprop debug.renderengine.backend skiaglthreaded")
-            appendLine("  setprop vendor.gpu.control.level 3")
-            appendLine("  setprop debug.egl.swapinterval 0")
-            appendLine("  settings put global updatable_driver_all_apps 3")
-            appendLine("  settings put global game_driver_opt_in_apps '$g'")
-            appendLine(") &")
-
-            // Group 5: Unbatched 480Hz/2560Hz Goodix/FocalTech Touch IC Hooks
-            appendLine("(")
-            appendLine("  cmd device_config set-sync-disabled-for-tests persistent 2>/dev/null")
-            appendLine("  cmd device_config put input_native_boot resample_touch false 2>/dev/null")
-            appendLine("  cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null")
-            appendLine("  cmd device_config put input_native_boot deep_press_enabled false 2>/dev/null")
-            appendLine("  setprop debug.input.resample 0")
-            appendLine("  setprop windowsmgr.max_events_per_sec 240")
-            appendLine("  settings put system gb_touch_edge_zone 0")
-            appendLine("  settings put system gb_touch_aim_accuracy 100")
-            appendLine("  settings put system gb_touch_tap_stability 0")
-            appendLine("  settings put system gb_touch_response_speed 100")
-            appendLine("  settings put secure tap_duration_enabled 0")
-            appendLine("  settings put secure ignore_repeat_enabled 0")
-            appendLine("  settings put system pointer_speed 7")
-            appendLine("  settings put system touch_sensitivity 5")
-            appendLine("  settings put system touch_response_speed 1")
-            appendLine("  settings put system touch_boost 1")
-            appendLine("  settings put secure touch_game_mode 1")
-            appendLine("  settings put system tp_game_mode 1")
-            appendLine("  settings put system touch_game_mode_enable 1")
-            appendLine("  settings put system miui_touch_sampling_rate_boost 1")
-            appendLine("  settings put system gamemode_touch_optimization 1")
-            appendLine("  settings put system gamemode_touch_follow_response 100")
-            appendLine("  settings put system gamemode_touch_continuous_response 100")
-            appendLine("  settings put system gamemode_touch_aim_sensitivity 100")
-            appendLine("  settings put system gamemode_touch_aim_response 100")
-            appendLine("  settings put system touch_slop 1")
-            appendLine("  settings put secure tap_timeout 50")
-            appendLine("  settings put secure long_press_timeout 200")
-            appendLine("  settings put secure multi_press_timeout 100")
-            appendLine("  settings put secure touch_blocking_period 0.0")
-            appendLine("  settings put system pointer_location 0")
-            appendLine("  setprop persist.vendor.touch.sampling_rate 480")
-            appendLine("  setprop persist.sys.touch.report_rate 480")
-            appendLine("  setprop debug.touch.frequency 480")
-            appendLine("  setprop debug.performance.tuning 1")
-            appendLine("  setprop video.accelerate.hw 1")
-            appendLine("  setprop debug.sf.hw 1")
-            appendLine(") &")
-
-            // Group 6: 12GB LPDDR5X Zero-Swap RAM Pinning
-            appendLine("(")
-            appendLine("  device_config put activity_manager use_compaction false 2>/dev/null")
-            appendLine("  device_config put activity_manager max_cached_processes 64 2>/dev/null")
-            appendLine("  device_config put activity_manager max_phantom_processes 1024 2>/dev/null")
-            appendLine("  settings put global ram_expand_size 0 2>/dev/null")
-            appendLine("  settings put system miui_memory_extension 0 2>/dev/null")
-            appendLine("  settings put global cached_apps_freezer enabled 2>/dev/null")
-            appendLine(") &")
-
-            // Group 7: FastConnect Wi-Fi Low-Latency & Netcode Bullet Radio Stack
-            appendLine("(")
-            appendLine("  cmd wifi force-low-latency-mode enabled 2>/dev/null")
-            appendLine("  cmd wifi force-hi-perf-mode enabled 2>/dev/null")
-            appendLine("  cmd netd resolver flushdefaultif 2>/dev/null")
-            appendLine("  cmd wifi set-wifi-enabled enabled 2>/dev/null")
-            appendLine("  settings put global wifi_scan_always_enabled 0 2>/dev/null")
-            appendLine("  settings put global ble_scan_always_enabled 0 2>/dev/null")
-            appendLine("  settings put global wifi_wakeup_enabled 0 2>/dev/null")
-            appendLine("  settings put global network_recommendations_enabled 0 2>/dev/null")
-            appendLine("  settings put global wifi_suspend_optimizations_enabled 0 2>/dev/null")
-            appendLine("  settings put global wifi_power_save 0 2>/dev/null")
-            appendLine("  settings put global network_latency_opt 1 2>/dev/null")
-            appendLine("  settings put system cloud_lowlatency_whitelist '$g' 2>/dev/null")
-            appendLine("  settings put system cloud_network_priority_whitelist '$g' 2>/dev/null")
-            appendLine(") &")
-
-            // Group 8: 1000Hz Raw Gyroscope & High-Sampling Sensors
-            appendLine("(")
-            appendLine("  cmd sensorservice restrict-uid-reset 2>/dev/null")
-            appendLine("  cmd appops set '$g' HIGH_SAMPLING_RATE_SENSORS allow 2>/dev/null")
-            appendLine("  setprop persist.vendor.sensors.gyro.sampling_rate 1000 2>/dev/null")
-            appendLine("  setprop debug.qualcomm.sns.hal.sensor.multichannel.enabled 1 2>/dev/null")
-            appendLine(") &")
-
-            // Group 9: Game Mode 2 + 120 FPS + Unrestricted Power Policy
-            appendLine("(")
-            appendLine("  cmd game mode 2 '$g' 2>/dev/null")
-            appendLine("  cmd game set --mode 2 --fps 120 '$g' 2>/dev/null")
-            appendLine("  device_config put game_overlay '$g' mode=2,skiavk=1,fps=120,loadingBoost=99999999:mode=3,skiavk=1,fps=120 2>/dev/null")
-            appendLine("  dumpsys deviceidle whitelist +'$g' 2>/dev/null")
-            appendLine("  am set-standby-bucket '$g' 5 2>/dev/null")
-            appendLine("  cmd appops set '$g' RUN_IN_BACKGROUND allow 2>/dev/null")
-            appendLine("  cmd appops set '$g' RUN_ANY_IN_BACKGROUND allow 2>/dev/null")
-            appendLine("  cmd appops set '$g' WAKE_LOCK allow 2>/dev/null")
-            appendLine("  cmd appops set '$g' START_FOREGROUND allow 2>/dev/null")
-            appendLine("  settings put system cloud_memory_freeze_whitelist '$g' 2>/dev/null")
-            appendLine("  settings put system millet_white '$g;' 2>/dev/null")
-            appendLine(") &")
-
-            // Group 10: 46+ App Force-Stop Purge in Subshell
-            appendLine("(")
-            appendLine("  for app in de.szalkowski.activitylauncher com.docx.word.excel.ppt.pdf.document.reader com.a0soft.gphone.app2sd com.b612.android.activity me.piebridge.brevent com.jpro.casiocalc com.capcut.android.tools com.openai.chatgpt com.android.chrome com.anthropic.claudeforandroid com.daraz.android com.pnikosis.pmyouthhub com.facebook.katana com.foodpanda.android com.google.android.apps.docs com.google.android.apps.photos com.google.android.apps.bard com.google.android.gm com.google.android.googlequicksearchbox com.instagram.android com.internee.app com.google.android.keep com.google.android.apps.lens com.adobe.lrmobile com.linkedin.android com.google.android.apps.maps com.google.android.apps.tachyon com.docx.word.excel.ppt.pdf.document.reader.editor com.melStudio.MovieBox com.olx.pk com.microsoft.office.outlook com.adobe.reader com.picsart.studio com.pikas.show.official com.android.vending com.playit.videoplayer com.supervpn.vpn com.surfflix.app com.microsoft.teams org.telegram.messenger com.zhiliaoapp.musically com.vng.vpnindia com.wps.moffice com.yango.rider com.google.android.youtube com.zarchiver.pro com.miui.personalassistant com.miui.contentextension com.miui.voiceassist com.miui.hybrid com.xiaomi.market com.miui.analytics com.miui.msa.global com.miui.Video com.xiaomi.mipicks; do")
-            appendLine("    am force-stop \"\$app\" 2>/dev/null")
-            appendLine("  done")
-            appendLine(") &")
-
-            // Group 9: CPU Priority & Pin PID if running
-            appendLine("(")
-            appendLine("  PUBG_PID=\$(pidof $g 2>/dev/null)")
-            appendLine("  if [ ! -z \"\$PUBG_PID\" ]; then")
-            appendLine("    taskset -p -a ff \$PUBG_PID 2>/dev/null")
-            appendLine("    ionice -c 2 -n 0 -p \$PUBG_PID 2>/dev/null")
-            appendLine("  fi")
-            appendLine(") &")
-
-            appendLine("wait")
-        }
-
-        Shell.run(fastScript)
-
-        // Asynchronously inject Netcode into UserCustom.ini without blocking UI
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 injectZeroDesyncNetcodeAndSmokeAntiLag(g)
             } catch (_: Throwable) {}
         }
 
-        "🔥 100% STABLE ESPORTS MODE ACTIVATED in <300ms for ${Games.known[g] ?: g}"
+        return "⚡ Monster 120FPS + HyperOS 3 WildBoost Active!"
+    }
+
+    suspend fun applyMonsterBoost(game: String, selfPkg: String): String = withContext(Dispatchers.IO) {
+        applyMonsterBoost(game, 120, "0.60")
     }
 
     suspend fun esportsMode(game: String, selfPkg: String): String = applyMonsterBoost(game, selfPkg)
@@ -2010,8 +1755,8 @@ EOF
                 setprop debug.sf.gpu_freq_index 0
                 setprop debug.sf.cpu_freq_index 0
                 setprop vendor.gpu.control.level 3
-                echo performance > /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null
-                echo 500000000 > /sys/class/kgsl/kgsl-3d0/min_clock_mhz 2>/dev/null
+                settings put global gpu_boost 1
+                settings put system speed_mode 1
             """.trimIndent()
             Shell.run(script)
             pinGameProcess(g)
@@ -2020,8 +1765,8 @@ EOF
             val script = """
                 cmd power set-fixed-performance-mode-enabled false 2>/dev/null
                 service call SurfaceFlinger 1008 i32 0 2>/dev/null
-                echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/devfreq/governor 2>/dev/null
-                echo 0 > /sys/class/kgsl/kgsl-3d0/min_clock_mhz 2>/dev/null
+                setprop vendor.gpu.control.level 0
+                settings put global gpu_boost 0
             """.trimIndent()
             Shell.run(script)
             "Hotdrop Overdrive Restored"
