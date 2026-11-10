@@ -241,6 +241,7 @@ fun TouchSamplingPad() {
 @Composable
 fun App() {
     val ctx = LocalContext.current
+    val sp = remember { ctx.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -328,8 +329,6 @@ fun App() {
     var gbTapStability by remember { mutableFloatStateOf(0f) }
     var selectedDriver by remember { mutableStateOf("system") }
     var networkMode by remember { mutableStateOf("pure_wifi") }
-
-    val sp = remember { ctx.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE) }
 
     fun loadProfileForGame(game: String) {
         pgtFps = sp.getInt("fps_$game", 120)
