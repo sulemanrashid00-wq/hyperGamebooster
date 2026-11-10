@@ -124,6 +124,7 @@ class AutoService : Service() {
                     Actions.setGbTouchAimAccuracy(gbAim)
                     Actions.setGbTouchResponseSpeed(gbResp)
                     Actions.setGbTouchTapStability(gbTap)
+                    Actions.applyRedMagicInstantActionSpeed(game)
 
                     // Apply PGT Graphics & Downscaling
                     Actions.applyPgtGraphicsConfig(

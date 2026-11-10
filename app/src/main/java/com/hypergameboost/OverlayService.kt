@@ -461,6 +461,24 @@ class OverlayService : Service() {
         }
         dock.addView(header)
 
+        // Row 00: 👑 RedMagic God & ⚡ Action Speed
+        val row00 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row00.addView(createCyberBtn("👑 RedMagic God") {
+            triggerHaptic(50)
+            scope.launch {
+                val res = Actions.applyRedMagicGodMode(game)
+                ui.post { Toast.makeText(this@OverlayService, res, Toast.LENGTH_SHORT).show() }
+            }
+        })
+        row00.addView(createCyberBtn("⚡ Action Speed") {
+            triggerHaptic(40)
+            scope.launch {
+                val res = Actions.applyRedMagicInstantActionSpeed(game)
+                ui.post { Toast.makeText(this@OverlayService, res, Toast.LENGTH_SHORT).show() }
+            }
+        })
+        dock.addView(row00)
+
         // Row 0: 🎯 1-Tap AIM + POTATO LOCK
         val row0 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row0.addView(createCyberBtn("🎯 AIM + POTATO LOCK") {

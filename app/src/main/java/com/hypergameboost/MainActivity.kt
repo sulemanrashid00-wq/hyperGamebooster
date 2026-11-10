@@ -485,7 +485,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v9.0 GOD-TIER",
+                        "v10.0 REDMAGIC & IPAD GOD",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -589,6 +589,39 @@ fun App() {
                                 color = Color(0xFF90A4AE),
                                 fontSize = 11.sp
                             )
+
+                            // v10.0 RedMagic God-Mode Hero Button
+                            Button(
+                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    magneticAimActive = true
+                                    bulletRegActive = true
+                                    maintainYFov = true
+                                    saveProfileForGame(selectedGame)
+                                    statusLog = "👑 Activating RedMagic Movement, Borderless iPad View & LAN Bullet-Reg..."
+                                    scope.launch {
+                                        val res = Actions.applyRedMagicGodMode(selectedGame)
+                                        statusLog = "✅ $res"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1744)),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.5.dp, Color(0xFFFFD700))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("👑", fontSize = 16.sp)
+                                    Text(
+                                        "ACTIVATE REDMAGIC MOVEMENT + IPAD VIEW + LAN BULLET-REG",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -1029,7 +1062,47 @@ fun App() {
                         Text("Sets p.NetEnableMoveCombining=0 & smoke particle spawn scale 0.25x in UserCustom.ini.", color = Color(0xFF90A4AE), fontSize = 11.sp)
                     }
 
-                    SectionCard("True Full-Screen Wide View (MaintainYFOV)", "Full-screen camera expansion without black bars") {
+                    SectionCard("📱 IPAD MINI 6 VIEW SUITE (TRUE FULLSCREEN - ZERO BLACK BARS)", "Ultra-wide FOV for rapid jiggle & peripheral target spotting") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            enabled = isReady,
+                            onClick = {
+                                triggerVibe(ctx)
+                                maintainYFov = true
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyMethodAIpadFov(selectedGame) }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("📱 METHOD A: NATIVE UE4 IPAD FOV + HYPEROS CUTOUT BYPASS (CRISP 1.5K)", color = Color.Black, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Text("Locks AspectRatio_MaintainYFOV in Engine.ini + enables noCutout overlay for ultra-crisp borderless 1220p view.", color = Color(0xFF90A4AE), fontSize = 10.sp)
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            enabled = isReady,
+                            onClick = {
+                                triggerVibe(ctx)
+                                maintainYFov = true
+                                saveProfileForGame(selectedGame)
+                                statusLog = "🚀 Launching 4:3 window and resizing to fullscreen borderless iPad Mini 6..."
+                                scope.launch {
+                                    val res = Actions.applyMethodBAutomatedIpadResizer(selectedGame)
+                                    statusLog = "✅ $res"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("🚀 METHOD B: 1-TAP AUTOMATED 4:3 SPLIT-LAUNCH -> FULLSCREEN IPAD MINI 6 RESIZER", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text("Auto-launches at 1220x1626 (4:3) -> waits 4s for UE4 camera lock -> resizes task to 1220x2712 with zero black bars!", color = Color(0xFF90A4AE), fontSize = 10.sp)
+
+                        Spacer(Modifier.height(4.dp))
+
                         ToggleRow(
                             label = "Camera Wide View (AspectRatio_MaintainYFOV)",
                             subtitle = "Expands horizontal field of view cleanly on full screen",
@@ -1325,6 +1398,27 @@ fun App() {
                 // TAB 2: TOUCH / AUDIO / AIRTRIGGERS
                 // =============================================================
                 2 -> {
+                    SectionCard("⚡ REDMAGIC & IPHONE INSTANT ANIMATION & ACTION SPEED", "Zero-delay gun switching, instant window mantling & lightning jiggle") {
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            enabled = isReady,
+                            onClick = {
+                                triggerVibe(ctx)
+                                statusLog = "⚡ Enforcing RedMagic/iPhone 0ms action speed & UE4 parallel animations..."
+                                scope.launch {
+                                    val res = Actions.applyRedMagicInstantActionSpeed(selectedGame)
+                                    statusLog = "✅ $res"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1744)),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color(0xFFFFD700))
+                        ) {
+                            Text("⚡ ACTIVATE INSTANT ACTION SPEED (FAST SWITCH / CLIMB / PEEK)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                        Text("Sets tap_duration_threshold=0.0s, anim scales=0.0, and injects a.ParallelAnimEvaluation=1 into UE4 for immediate action dispatch.", color = Color(0xFF90A4AE), fontSize = 10.5.sp)
+                    }
+
                     Button(
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         onClick = {

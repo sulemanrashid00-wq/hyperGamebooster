@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "9.0-GodTier"
+        versionCode = 10
+        versionName = "10.0-RedMagicIpadGod"
     }
 
     buildTypes {
