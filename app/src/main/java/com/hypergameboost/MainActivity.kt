@@ -288,9 +288,10 @@ fun App() {
     var r1CoordX by remember { mutableStateOf("${CrosshairSettings.r1TargetX}") }
     var r1CoordY by remember { mutableStateOf("${CrosshairSettings.r1TargetY}") }
 
-    // Clean Volume Booster & Touch Presets (Zero EQ Distortion)
-    var cleanBoostPercent by remember { mutableIntStateOf(sp.getInt("clean_boost_pct", 40)) }
+    // Clean Volume Booster & Realme Dolby Atmos Presets (Zero EQ Distortion)
+    var cleanBoostPercent by remember { mutableIntStateOf(sp.getInt("clean_boost_pct", 50)) }
     var isCleanBoostActive by remember { mutableStateOf(sp.getBoolean("clean_boost_active", false)) }
+    var activeDolbyPreset by remember { mutableIntStateOf(sp.getInt("dolby_preset", 0)) }
     var selectedTouchPreset by remember { mutableStateOf(1) }
 
     // Motion Control state
@@ -356,7 +357,8 @@ fun App() {
         gbTapStability = sp.getFloat("gb_tap_$game", 0f)
         selectedDriver = sp.getString("driver_$game", "system") ?: "system"
         networkMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
-        cleanBoostPercent = sp.getInt("clean_boost_pct_$game", sp.getInt("clean_boost_pct", 40))
+        activeDolbyPreset = sp.getInt("dolby_preset_$game", sp.getInt("dolby_preset", 0))
+        cleanBoostPercent = sp.getInt("clean_boost_pct_$game", sp.getInt("clean_boost_pct", 50))
         isCleanBoostActive = sp.getBoolean("clean_boost_active_$game", false)
         CrosshairSettings.magnifierScale = zoomScale
     }
@@ -388,6 +390,8 @@ fun App() {
             .putFloat("gb_tap_$game", gbTapStability)
             .putString("driver_$game", selectedDriver)
             .putString("net_mode_$game", networkMode)
+            .putInt("dolby_preset_$game", activeDolbyPreset)
+            .putInt("dolby_preset", activeDolbyPreset)
             .putInt("clean_boost_pct_$game", cleanBoostPercent)
             .putBoolean("clean_boost_active_$game", isCleanBoostActive)
             .putInt("clean_boost_pct", cleanBoostPercent)
@@ -498,7 +502,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v11.1 CLEAN VOLUME GOD-TIER",
+                        "v11.2 REALME DOLBY GOD-TIER",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -1560,9 +1564,106 @@ fun App() {
                         Text("Grants HIGH_SAMPLING_RATE_SENSORS permission & sets gyro sampling to 1000Hz with zero software lag filter.", color = Color(0xFF90A4AE), fontSize = 11.sp)
                     }
 
-                    SectionCard("🔊 PURE CLEAN VOLUME BOOSTER (NO EQ / NO DISTORTION)", "Zero Digital Clipping • 0mB to 650mB Safe Gain Ceiling • 100% Original Audio Quality") {
-                        val gainMb = (cleanBoostPercent * 6.5f).toInt()
-                        val gainDb = gainMb / 100.0f
+                    SectionCard("🎧 REALME DOLBY ATMOS & FOOTSTEP (\"TEP-TEP\") PRESETS", "Subtractive Bass-Cut + Midrange Footstep Isolation + 3D Surround (Zero Distortion)") {
+                        val activeName = when (activeDolbyPreset) {
+                            1 -> "🎯 Preset 1: Realme Dolby Gaming (Full Tep-Tep + 3D Surround)"
+                            2 -> "🗣️ Preset 2: Dolby Voice / Scout (Pure Footstep Isolation)"
+                            3 -> "🌌 Preset 3: 3D Spatial Surround Radar (Left/Right Pinpoint)"
+                            else -> "🔇 OFF (Stock Flat Sound / EQ Released)"
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (activeDolbyPreset > 0) Color(0xFF10281E) else Color(0xFF1A2432),
+                            border = BorderStroke(1.dp, if (activeDolbyPreset > 0) Color(0xFF00FF66) else Color(0xFF37474F)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = activeName,
+                                    color = if (activeDolbyPreset > 0) Color(0xFF00FF66) else Color(0xFF90A4AE),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.5.sp
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // 4 Distinct Preset Buttons (Highlight active in Neon Green)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(
+                                1 to "🎯 Preset 1: Realme Dolby Gaming (Full Tep-Tep + 3D)",
+                                2 to "🗣️ Preset 2: Dolby Voice / Scout (Pure Footsteps)",
+                                3 to "🌌 Preset 3: 3D Spatial Surround Radar (Pinpoint)",
+                                0 to "🔇 OFF (Stock Flat Sound)"
+                            ).forEach { (pId, label) ->
+                                val isSelected = activeDolbyPreset == pId
+                                Button(
+                                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                                    onClick = {
+                                        triggerVibe(ctx)
+                                        activeDolbyPreset = pId
+                                        saveProfileForGame(selectedGame)
+                                        val res = Actions.applyHardwareDolbyAtmosPreset(pId)
+                                        statusLog = res
+                                        Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isSelected) Color(0xFF00FF66) else Color(0xFF1E2836)
+                                    ),
+                                    border = BorderStroke(1.dp, if (isSelected) Color(0xFF00FF66) else Color(0xFF37474F)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 11.5.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Left (520Hz) / Right (780Hz) Stereo Test Row
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    AudioTest.playStereoCheck(true)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
+                                border = BorderStroke(1.dp, Color(0xFF00E5FF)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("🎧 Test Left (520Hz)", fontSize = 11.sp, color = Color(0xFF00E5FF))
+                            }
+                            Button(
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    AudioTest.playStereoCheck(false)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
+                                border = BorderStroke(1.dp, Color(0xFF00E5FF)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("🎧 Test Right (780Hz)", fontSize = 11.sp, color = Color(0xFF00E5FF))
+                            }
+                        }
+                    }
+
+                    SectionCard("🔊 PURE CLEAN VOLUME BOOSTER SLIDER (DISTORTION-FREE)", "Safe Headroom Limiter — Increases loudness without tearing or clipping") {
+                        val maxSafeMb = if (activeDolbyPreset > 0) 400 else 550
+                        val targetGainMb = ((cleanBoostPercent / 100f) * maxSafeMb).toInt()
+                        val gainDb = targetGainMb / 100.0f
 
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -1576,16 +1677,20 @@ fun App() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (isCleanBoostActive) "Status: ACTIVE (+${gainMb}mB / +${"%.1f".format(gainDb)}dB)" else "Status: OFF (100% Stock Sound)",
+                                    text = if (isCleanBoostActive) "Status: ACTIVE (+${targetGainMb}mB / +${"%.1f".format(gainDb)}dB)" else "Status: OFF (Stock Volume)",
                                     color = if (isCleanBoostActive) Color(0xFF00FF66) else Color(0xFF90A4AE),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.5.sp
                                 )
-                                Text("Ceiling: +6.5dB Safe", color = Color(0xFF00E5FF), fontSize = 10.5.sp)
+                                Text(
+                                    text = if (activeDolbyPreset > 0) "Ceiling: +4.0dB (Guard)" else "Ceiling: +5.5dB Safe",
+                                    color = Color(0xFF00E5FF),
+                                    fontSize = 10.5.sp
+                                )
                             }
                         }
 
-                        Text("Clean Volume Boost: ${cleanBoostPercent}% (+${gainMb}mB / +${"%.1f".format(gainDb)}dB)", color = Color.White, fontSize = 12.sp)
+                        Text("Clean Volume Boost: ${cleanBoostPercent}% (+${targetGainMb}mB / +${"%.1f".format(gainDb)}dB)", color = Color.White, fontSize = 12.sp)
                         Slider(
                             value = cleanBoostPercent.toFloat(),
                             onValueChange = {
@@ -1610,7 +1715,7 @@ fun App() {
                                 onClick = {
                                     triggerVibe(ctx)
                                     isCleanBoostActive = true
-                                    if (cleanBoostPercent == 0) cleanBoostPercent = 40
+                                    if (cleanBoostPercent == 0) cleanBoostPercent = 50
                                     saveProfileForGame(selectedGame)
                                     val res = AudioTest.setCleanVolumeBoost(ctx, true, cleanBoostPercent)
                                     statusLog = res
@@ -1623,7 +1728,7 @@ fun App() {
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("🔊 BOOST ON", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                Text("🔊 VOLUME BOOST ON", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
                             OutlinedButton(
                                 modifier = Modifier.weight(1f).height(46.dp),
@@ -1640,7 +1745,7 @@ fun App() {
                                 },
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("🔇 OFF (100% STOCK)", fontSize = 11.sp)
+                                Text("🔇 VOLUME BOOST OFF", fontSize = 11.sp)
                             }
                         }
 

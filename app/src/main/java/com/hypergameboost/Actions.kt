@@ -1703,6 +1703,27 @@ EOF
         }
     }
 
+    fun applyHardwareDolbyAtmosPreset(presetId: Int): String {
+        val cmds = if (presetId > 0) {
+            listOf(
+                // Enable HyperOS / Realme Hardware Dolby Atmos & Spatial Game Effect
+                "settings put system dolby_enable 1",
+                "settings put global dolby_enable 1",
+                "settings put system dolby_effect_mode $presetId",
+                "settings put secure music_in_communication 1",
+                "settings put global audio_safe_volume_state 2",
+                "settings put global usb_audio_automatic_routing_disabled 0"
+            )
+        } else {
+            listOf(
+                "settings put system dolby_enable 0",
+                "settings put global dolby_enable 0"
+            )
+        }
+        Shell.runBatch(cmds)
+        return AudioTest.applyDolbyFootstepPreset(presetId)
+    }
+
     suspend fun setSystemVolumeOverdriveShizuku(volumePercent: Int = 100): String = withContext(Dispatchers.IO) {
         val streamVol = 15
         val script = """

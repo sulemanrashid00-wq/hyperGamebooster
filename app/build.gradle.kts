@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "11.1-CleanVolume"
+        versionCode = 13
+        versionName = "11.2-DolbyFootsteps"
     }
 
     buildTypes {

@@ -577,23 +577,75 @@ class OverlayService : Service() {
         // Row 5: AMOLED AFK Lock & Clean Boost Toggle
         val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
-        row5.addView(createCyberBtn(if (AudioTest.isCleanBoostActive) "🔊 Boost: ON" else "🔊 Boost: OFF") {
-            val next = !AudioTest.isCleanBoostActive
-            val pct = if (next) 40 else 0
+        row5.addView(createCyberBtn(if (AudioTest.isVolumeBoostOn) "🔊 Vol: ON" else "🔊 Vol: OFF") {
+            val next = !AudioTest.isVolumeBoostOn
+            val pct = if (next) 50 else 0
             val msg = AudioTest.setCleanVolumeBoost(this@OverlayService, next, pct)
-            (it as? Button)?.text = if (next) "🔊 Boost: ON" else "🔊 Boost: OFF"
+            (it as? Button)?.text = if (next) "🔊 Vol: ON" else "🔊 Vol: OFF"
             Toast.makeText(this@OverlayService, msg, Toast.LENGTH_SHORT).show()
         })
         dock.addView(row5)
 
-        // Row 5b: 🔊 Clean Volume: [OFF] [+30%] [+60%] [+100%]
+        // Row A (Dolby EQ): [OFF], [🎯 Dolby Game], [🗣️ Voice Tep-Tep], [🌌 3D]
+        val rowDolby = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(4, 4, 4, 4)
+        }
+        val dolbyTitle = TextView(this).apply {
+            text = "🎧 EQ: "
+            setTextColor(Color.parseColor("#00FF66"))
+            textSize = 10f
+            setPadding(4, 0, 4, 0)
+        }
+        rowDolby.addView(dolbyTitle)
+
+        val dolbyButtons = mutableListOf<Button>()
+        listOf(
+            0 to "OFF",
+            1 to "🎯 Game",
+            2 to "🗣️ Voice",
+            3 to "🌌 3D"
+        ).forEach { (pId, label) ->
+            val btn = Button(this).apply {
+                text = label
+                textSize = 8.5f
+                setPadding(4, 2, 4, 2)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(1, 0, 1, 0)
+                }
+                val isSelected = AudioTest.activePresetId == pId
+                setBackgroundColor(if (isSelected) Color.parseColor("#00C853") else Color.parseColor("#1E2836"))
+                setTextColor(if (isSelected) Color.BLACK else Color.WHITE)
+                setOnClickListener {
+                    triggerHaptic(25)
+                    scope.launch {
+                        val res = Actions.applyHardwareDolbyAtmosPreset(pId)
+                        Toast.makeText(this@OverlayService, res, Toast.LENGTH_SHORT).show()
+                    }
+                    dolbyButtons.forEach { b ->
+                        b.setBackgroundColor(Color.parseColor("#1E2836"))
+                        b.setTextColor(Color.WHITE)
+                    }
+                    setBackgroundColor(Color.parseColor("#00C853"))
+                    setTextColor(Color.BLACK)
+                }
+            }
+            dolbyButtons.add(btn)
+            rowDolby.addView(btn)
+        }
+        dock.addView(rowDolby)
+
+        // Row B (Clean Vol): [OFF], [+30%], [+60%], [+100%]
         val rowVol = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(4, 4, 4, 4)
         }
         val volTitle = TextView(this).apply {
-            text = "🔊 "
+            text = "🔊 Vol: "
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 10f
             setPadding(4, 0, 4, 0)
@@ -611,7 +663,7 @@ class OverlayService : Service() {
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                     setMargins(2, 0, 2, 0)
                 }
-                val isSelected = (pct == 0 && !AudioTest.isCleanBoostActive) || (AudioTest.isCleanBoostActive && AudioTest.currentBoostPercent == pct)
+                val isSelected = (pct == 0 && !AudioTest.isVolumeBoostOn) || (AudioTest.isVolumeBoostOn && AudioTest.volumeBoostPercent == pct)
                 setBackgroundColor(if (isSelected) Color.parseColor("#00C853") else Color.parseColor("#1E2836"))
                 setTextColor(if (isSelected) Color.BLACK else Color.WHITE)
                 setOnClickListener {
@@ -672,10 +724,9 @@ class OverlayService : Service() {
     }
 
     private fun audioPresetName(): String = when (AudioTest.activePreset) {
-        1 -> "FxSound"
-        2 -> "iQOO 200%"
-        3 -> "SplitterSafe"
-        4 -> "Pro Flat"
+        1 -> "Dolby Game"
+        2 -> "Voice Scout"
+        3 -> "3D Spatial"
         else -> "Stock"
     }
 
@@ -1386,7 +1437,7 @@ class OverlayService : Service() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 8, 0, 0)
         }
-        var boostOn = AudioTest.isCleanBoostActive
+        var boostOn = AudioTest.isVolumeBoostOn
         val volBtn = Button(this).apply {
             text = if (boostOn) "🔊 Vol: ON" else "🔊 Vol: OFF"
             textSize = 9f
@@ -1402,10 +1453,42 @@ class OverlayService : Service() {
                 triggerHaptic(25)
                 boostOn = !boostOn
                 text = if (boostOn) "🔊 Vol: ON" else "🔊 Vol: OFF"
-                scope.launch { AudioTest.setCleanVolumeBoost(this@OverlayService, boostOn, if (boostOn) 40 else 0) }
+                scope.launch { AudioTest.setCleanVolumeBoost(this@OverlayService, boostOn, if (boostOn) 50 else 0) }
             }
         }
         toggleRow.addView(volBtn)
+
+        val dolbyBtn = Button(this).apply {
+            text = when (AudioTest.activePreset) {
+                1 -> "🎧 Dolby: Game"
+                2 -> "🎧 Dolby: Voice"
+                3 -> "🎧 Dolby: 3D"
+                else -> "🎧 Dolby: OFF"
+            }
+            textSize = 9f
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(220, 20, 32, 48))
+            setPadding(6, 2, 6, 2)
+            minHeight = 0
+            minimumHeight = 0
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(2, 0, 2, 0)
+            }
+            setOnClickListener {
+                triggerHaptic(25)
+                val next = (AudioTest.activePreset + 1) % 4
+                scope.launch {
+                    Actions.applyHardwareDolbyAtmosPreset(next)
+                }
+                text = when (next) {
+                    1 -> "🎧 Dolby: Game"
+                    2 -> "🎧 Dolby: Voice"
+                    3 -> "🎧 Dolby: 3D"
+                    else -> "🎧 Dolby: OFF"
+                }
+            }
+        }
+        toggleRow.addView(dolbyBtn)
 
         val bypassBtn = Button(this).apply {
             text = if (Actions.isBypassChargingOn) "🔌 Bypass: ON" else "🔌 Bypass: OFF"

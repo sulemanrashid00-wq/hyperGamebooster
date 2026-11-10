@@ -160,9 +160,13 @@ class AutoService : Service() {
                     Actions.pinGameProcess(game)
                     Actions.lockHardware120HzDisplayMode()
 
-                    // 4. Pure Clean Volume Boost & DAC Protection
+                    // 4. Pure Clean Volume Boost, Realme Dolby Footsteps & DAC Protection
+                    val dolbyPreset = sp.getInt("dolby_preset_$game", sp.getInt("dolby_preset", 0))
+                    if (dolbyPreset > 0) {
+                        Actions.applyHardwareDolbyAtmosPreset(dolbyPreset)
+                    }
                     val cleanBoost = sp.getBoolean("clean_boost_$game", true)
-                    val cleanPct = sp.getInt("clean_boost_pct_$game", 40)
+                    val cleanPct = sp.getInt("clean_boost_pct_$game", 50)
                     if (cleanBoost) {
                         AudioTest.setCleanVolumeBoost(this@AutoService, true, cleanPct)
                         Actions.applyAudioAndDacFix(true)
@@ -181,6 +185,7 @@ class AutoService : Service() {
             } else if (wasGameRunning) {
                 // Game closed! Restore stock settings automatically
                 AudioTest.setCleanVolumeBoost(this@AutoService, false, 0)
+                Actions.applyHardwareDolbyAtmosPreset(0)
                 Actions.applyAudioAndDacFix(false)
                 Actions.revertAll(game)
                 NativeTools.stopAdpfSession()
