@@ -101,6 +101,9 @@ class AutoService : Service() {
                     val gbTap = sp.getFloat("gb_tap_$game", 0f).toInt()
                     val driverMode = sp.getString("driver_$game", "system") ?: "system"
                     val netMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
+                    val audioOverdrive = sp.getBoolean("audio_overdrive_$game", true)
+                    val audioVol = sp.getInt("audio_vol_$game", 165)
+                    val audioStep = sp.getInt("audio_step_$game", 6)
 
                     // Apply hardware refresh rate, zero-swap & FastConnect
                     Actions.setHardwareRefreshRate(refreshRate)
@@ -156,6 +159,13 @@ class AutoService : Service() {
                     // 3. Pin process to Prime CPU cores immediately & lock 120Hz display mode
                     Actions.pinGameProcess(game)
                     Actions.lockHardware120HzDisplayMode()
+
+                    // 4. Laptop FxSound 200% Audio Overdrive & DAC Protection
+                    if (audioOverdrive) {
+                        AudioTest.applyLaptopAudioOverdrive(this@AutoService, true, audioVol, audioStep)
+                        Actions.applyAudioAndDacFix(true)
+                        Actions.setSystemVolumeOverdriveShizuku(audioVol)
+                    }
                 }
 
                 // 60-Second Watchdog Tick
@@ -168,6 +178,8 @@ class AutoService : Service() {
                 }
             } else if (wasGameRunning) {
                 // Game closed! Restore stock settings automatically
+                AudioTest.applyLaptopAudioOverdrive(this@AutoService, false)
+                Actions.applyAudioAndDacFix(false)
                 Actions.revertAll(game)
                 NativeTools.stopAdpfSession()
                 NativeTools.setWifiLowLatency(this@AutoService, false)

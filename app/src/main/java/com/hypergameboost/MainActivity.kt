@@ -287,7 +287,10 @@ fun App() {
     var r1CoordX by remember { mutableStateOf("${CrosshairSettings.r1TargetX}") }
     var r1CoordY by remember { mutableStateOf("${CrosshairSettings.r1TargetY}") }
 
-    // Tactical Audio Hunter & Touch Presets
+    // Tactical Audio Hunter, 200% Overdrive & Touch Presets
+    var audioVolumePercent by remember { mutableIntStateOf(165) }
+    var audioFootstepDb by remember { mutableIntStateOf(6) }
+    var audioOverdriveActive by remember { mutableStateOf(AudioTest.isOverdriveEnabled) }
     var selectedAudioPreset by remember { mutableStateOf(AudioTest.activePreset) }
     var selectedTouchPreset by remember { mutableStateOf(1) }
 
@@ -356,6 +359,9 @@ fun App() {
         gbTapStability = sp.getFloat("gb_tap_$game", 0f)
         selectedDriver = sp.getString("driver_$game", "system") ?: "system"
         networkMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
+        audioVolumePercent = sp.getInt("audio_vol_$game", 165)
+        audioFootstepDb = sp.getInt("audio_step_$game", 6)
+        audioOverdriveActive = sp.getBoolean("audio_overdrive_$game", false)
         CrosshairSettings.magnifierScale = zoomScale
     }
 
@@ -386,6 +392,9 @@ fun App() {
             .putFloat("gb_tap_$game", gbTapStability)
             .putString("driver_$game", selectedDriver)
             .putString("net_mode_$game", networkMode)
+            .putInt("audio_vol_$game", audioVolumePercent)
+            .putInt("audio_step_$game", audioFootstepDb)
+            .putBoolean("audio_overdrive_$game", audioOverdriveActive)
             .apply()
     }
 
@@ -492,7 +501,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v10.1 STABLE GOD-TIER",
+                        "v11.0 LAPTOP AUDIO GOD-TIER",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -1554,6 +1563,212 @@ fun App() {
                         Text("Grants HIGH_SAMPLING_RATE_SENSORS permission & sets gyro sampling to 1000Hz with zero software lag filter.", color = Color(0xFF90A4AE), fontSize = 11.sp)
                     }
 
+                    SectionCard("🔊 LAPTOP FXSOUND & iQOO 200% VOLUME OVERDRIVE STUDIO", "Windows FxSound / Vivo 200% Preamp Gain + DynamicsProcessing + Brickwall Limiter") {
+                        val gainDb = (audioVolumePercent - 100) * 0.15f
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (audioOverdriveActive) Color(0xFF10281E) else Color(0xFF1A2432),
+                            border = BorderStroke(1.dp, if (audioOverdriveActive) Color(0xFF00FF66) else Color(0xFF37474F)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(
+                                        "Mode: ${if (audioOverdriveActive) "ACTIVE (200% DSP)" else "OFF (Stock)"}",
+                                        color = if (audioOverdriveActive) Color(0xFF00FF66) else Color(0xFF90A4AE),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.5.sp
+                                    )
+                                    Text("Limiter: -1.0dB Safe", color = Color(0xFF00E5FF), fontSize = 11.sp)
+                                }
+                                Text(
+                                    "Preamp: +${"%.1f".format(gainDb)}dB (${audioVolumePercent}%) | Tactical Footsteps: +${audioFootstepDb}dB | OCP Protect: ON",
+                                    color = Color(0xFFECEFF1),
+                                    fontSize = 10.5.sp
+                                )
+                            }
+                        }
+
+                        Text("Master Volume Overdrive: ${audioVolumePercent}% (+${"%.1f".format(gainDb)}dB Preamp)", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = audioVolumePercent.toFloat(),
+                            onValueChange = {
+                                audioVolumePercent = it.toInt()
+                            },
+                            onValueChangeFinished = {
+                                audioOverdriveActive = true
+                                saveProfileForGame(selectedGame)
+                                triggerVibe(ctx)
+                                val res = AudioTest.applyLaptopAudioOverdrive(ctx, true, audioVolumePercent, audioFootstepDb)
+                                statusLog = res
+                                Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                scope.launch { Actions.setSystemVolumeOverdriveShizuku(audioVolumePercent) }
+                            },
+                            valueRange = 100f..200f,
+                            steps = 20
+                        )
+
+                        Text("Tactical Footstep Boost (1kHz–4.5kHz): +${audioFootstepDb}dB", color = Color.White, fontSize = 12.sp)
+                        Slider(
+                            value = audioFootstepDb.toFloat(),
+                            onValueChange = {
+                                audioFootstepDb = it.toInt()
+                            },
+                            onValueChangeFinished = {
+                                audioOverdriveActive = true
+                                saveProfileForGame(selectedGame)
+                                triggerVibe(ctx)
+                                val res = AudioTest.applyLaptopAudioOverdrive(ctx, true, audioVolumePercent, audioFootstepDb)
+                                statusLog = res
+                                Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                            },
+                            valueRange = 0f..10f,
+                            steps = 10
+                        )
+
+                        Text("3 1-Tap Laptop & Phone Audio Profiles:", color = Color.White, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = audioVolumePercent == 165 && audioFootstepDb == 6,
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    audioVolumePercent = 165
+                                    audioFootstepDb = 6
+                                    audioOverdriveActive = true
+                                    selectedAudioPreset = 1
+                                    saveProfileForGame(selectedGame)
+                                    val res = AudioTest.applyPreset(ctx, 1)
+                                    statusLog = res
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        Actions.applyAudioAndDacFix(true)
+                                        Actions.setSystemVolumeOverdriveShizuku(165)
+                                    }
+                                },
+                                label = { Text("💻 Laptop FxSound (165% + 6dB)", fontSize = 11.sp) }
+                            )
+                            FilterChip(
+                                selected = audioVolumePercent == 200 && audioFootstepDb == 8,
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    audioVolumePercent = 200
+                                    audioFootstepDb = 8
+                                    audioOverdriveActive = true
+                                    selectedAudioPreset = 2
+                                    saveProfileForGame(selectedGame)
+                                    val res = AudioTest.applyPreset(ctx, 2)
+                                    statusLog = res
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        Actions.applyAudioAndDacFix(true)
+                                        Actions.setSystemVolumeOverdriveShizuku(200)
+                                    }
+                                },
+                                label = { Text("🔥 iQOO 200% Max (200% + 8dB)", fontSize = 11.sp) }
+                            )
+                            FilterChip(
+                                selected = audioVolumePercent == 150 && audioFootstepDb == 6,
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    audioVolumePercent = 150
+                                    audioFootstepDb = 6
+                                    audioOverdriveActive = true
+                                    selectedAudioPreset = 3
+                                    saveProfileForGame(selectedGame)
+                                    val res = AudioTest.applyPreset(ctx, 3)
+                                    statusLog = res
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        Actions.applyAudioAndDacFix(true)
+                                        Actions.setSystemVolumeOverdriveShizuku(150)
+                                    }
+                                },
+                                label = { Text("🔌 Splitter Safe (150% + 6dB)", fontSize = 11.sp) }
+                            )
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    audioOverdriveActive = true
+                                    saveProfileForGame(selectedGame)
+                                    val res = AudioTest.applyLaptopAudioOverdrive(ctx, true, audioVolumePercent, audioFootstepDb)
+                                    statusLog = res
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        Actions.applyAudioAndDacFix(true)
+                                        Actions.setSystemVolumeOverdriveShizuku(audioVolumePercent)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("🔊 ACTIVATE 200% OVERDRIVE", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    audioOverdriveActive = false
+                                    audioVolumePercent = 100
+                                    audioFootstepDb = 0
+                                    selectedAudioPreset = 0
+                                    saveProfileForGame(selectedGame)
+                                    val res = AudioTest.applyLaptopAudioOverdrive(ctx, false)
+                                    statusLog = res
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    scope.launch {
+                                        Actions.applyAudioAndDacFix(false)
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("STOCK OFF", fontSize = 11.sp)
+                            }
+                        }
+
+                        Button(
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
+                            onClick = {
+                                triggerVibe(ctx)
+                                scope.launch {
+                                    val res = Actions.setSystemVolumeOverdriveShizuku(audioVolumePercent)
+                                    statusLog = res
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2836)),
+                            border = BorderStroke(1.dp, Color(0xFF00E5FF)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("⚡ FORCE 100% HARDWARE MEDIA STREAM (cmd media_session)", color = Color(0xFF00E5FF), fontSize = 10.5.sp)
+                        }
+
+                        Text("Earphone Left/Right Channel Sound Verification (Hear 200% Loudness):", color = Color.White, fontSize = 11.sp)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(modifier = Modifier.weight(1f), onClick = {
+                                triggerVibe(ctx)
+                                AudioTest.play(0)
+                                Toast.makeText(ctx, "🔊 Playing LEFT Channel Tone (520Hz)", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Text("Test LEFT (520Hz)", fontSize = 10.5.sp)
+                            }
+                            Button(modifier = Modifier.weight(1f), onClick = {
+                                triggerVibe(ctx)
+                                AudioTest.play(1)
+                                Toast.makeText(ctx, "🔊 Playing RIGHT Channel Tone (780Hz)", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Text("Test RIGHT (780Hz)", fontSize = 10.5.sp)
+                            }
+                        }
+                    }
+
                     SectionCard("🎧 FOOTSTEP LATENCY & AUDIO DAC UNCAP", "Bypasses Android safe media limit & communication latency") {
                         ToggleRow(
                             label = "Footstep Latency & Audio Bypass",
@@ -1676,9 +1891,19 @@ fun App() {
                                     onClick = {
                                         triggerVibe(ctx)
                                         selectedAudioPreset = presetId
-                                        val res = AudioTest.applyPreset(presetId)
+                                        val res = AudioTest.applyPreset(ctx, presetId)
+                                        audioVolumePercent = AudioTest.currentVolumePercent
+                                        audioFootstepDb = AudioTest.currentFootstepDb
+                                        audioOverdriveActive = AudioTest.isOverdriveEnabled
+                                        saveProfileForGame(selectedGame)
                                         statusLog = res
                                         Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                        if (presetId > 0) {
+                                            scope.launch {
+                                                Actions.applyAudioAndDacFix(true)
+                                                Actions.setSystemVolumeOverdriveShizuku(audioVolumePercent)
+                                            }
+                                        }
                                     },
                                     label = { Text(label, fontSize = 11.sp) }
                                 )

@@ -579,11 +579,64 @@ class OverlayService : Service() {
         row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
         row5.addView(createCyberBtn("🎧 Audio: ${audioPresetName()}") {
             val next = (AudioTest.activePreset + 1) % 5
-            val msg = AudioTest.applyPreset(next)
+            val msg = AudioTest.applyPreset(this@OverlayService, next)
             (it as? Button)?.text = "🎧 Audio: ${audioPresetName()}"
             Toast.makeText(this@OverlayService, msg, Toast.LENGTH_SHORT).show()
         })
         dock.addView(row5)
+
+        // Row 5b: 🔊 Volume Overdrive (100% | 150% | 175% | 200% MAX)
+        val rowVol = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(4, 4, 4, 4)
+        }
+        val volTitle = TextView(this).apply {
+            text = "🔊 Vol: "
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 10f
+            setPadding(4, 0, 4, 0)
+        }
+        rowVol.addView(volTitle)
+
+        val volButtons = mutableListOf<Button>()
+        listOf(100 to "100%", 150 to "150%", 175 to "175%", 200 to "200%🔥").forEach { (pct, label) ->
+            val btn = Button(this).apply {
+                text = label
+                textSize = 9f
+                setPadding(6, 2, 6, 2)
+                minHeight = 0
+                minimumHeight = 0
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(2, 0, 2, 0)
+                }
+                val isSelected = AudioTest.currentVolumePercent == pct && AudioTest.isOverdriveEnabled
+                setBackgroundColor(if (isSelected) Color.parseColor("#00C853") else Color.parseColor("#1E2836"))
+                setTextColor(if (isSelected) Color.BLACK else Color.WHITE)
+                setOnClickListener {
+                    triggerHaptic(25)
+                    val res = AudioTest.applyLaptopAudioOverdrive(
+                        this@OverlayService,
+                        enable = true,
+                        volumePercent = pct,
+                        footstepDb = if (pct == 200) 8 else AudioTest.currentFootstepDb
+                    )
+                    scope.launch {
+                        Actions.setSystemVolumeOverdriveShizuku(pct)
+                    }
+                    volButtons.forEach { b ->
+                        b.setBackgroundColor(Color.parseColor("#1E2836"))
+                        b.setTextColor(Color.WHITE)
+                    }
+                    setBackgroundColor(Color.parseColor("#00C853"))
+                    setTextColor(Color.BLACK)
+                    Toast.makeText(this@OverlayService, res, Toast.LENGTH_SHORT).show()
+                }
+            }
+            volButtons.add(btn)
+            rowVol.addView(btn)
+        }
+        dock.addView(rowVol)
 
         // Row 6: Screenshot & Close
         val row6 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -619,9 +672,9 @@ class OverlayService : Service() {
     }
 
     private fun audioPresetName(): String = when (AudioTest.activePreset) {
-        1 -> "Footstep"
-        2 -> "Gunshot"
-        3 -> "Vehicle"
+        1 -> "FxSound"
+        2 -> "iQOO 200%"
+        3 -> "SplitterSafe"
         4 -> "Pro Flat"
         else -> "Stock"
     }

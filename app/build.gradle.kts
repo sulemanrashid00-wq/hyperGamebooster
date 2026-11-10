@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "10.1-StableGodTier"
+        versionCode = 12
+        versionName = "11.0-LaptopAudioGod"
     }
 
     buildTypes {
