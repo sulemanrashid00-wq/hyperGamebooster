@@ -41,7 +41,7 @@ object AudioTest {
 
     var currentFootstepDb: Int
         get() = 0
-        set(_) {}
+        set(value) {}
 
     @Synchronized
     fun setCleanVolumeBoost(

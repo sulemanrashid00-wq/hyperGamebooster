@@ -574,9 +574,6 @@ class OverlayService : Service() {
         })
         dock.addView(row4)
 
-        // Row 5: AMOLED AFK Lock & Tactical Audio Preset
-        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
         // Row 5: AMOLED AFK Lock & Clean Boost Toggle
         val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
