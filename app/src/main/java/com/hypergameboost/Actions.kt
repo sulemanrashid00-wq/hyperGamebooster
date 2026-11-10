@@ -727,6 +727,7 @@ EOF
                 settings put system speed_mode 1
                 settings put secure speed_mode_enable 1
                 settings put system ultimate_mode 1
+                settings put system gb_boosting 1
                 setprop persist.sys.power.speed 1
                 setprop persist.sys.performance.level 3
                 setprop debug.qualcomm.sns.hal.sensor.multichannel.enabled 1
@@ -734,8 +735,6 @@ EOF
                 setprop sys.miui.feas.enable 1
                 setprop persist.vendor.power.feas.enable 1
                 setprop persist.sys.feas.enable 1
-                echo 1 > /sys/module/feas/parameters/feas_enabled 2>/dev/null
-                echo 1 > /sys/module/perfmgr/parameters/perfmgr_enable 2>/dev/null
             """.trimIndent()
             Shell.run(script)
             "🚀 WildBoost 3.0 & FEAS Frame Engine ACTIVE"
@@ -743,8 +742,10 @@ EOF
             val script = """
                 settings put system speed_mode 0
                 settings put system ultimate_mode 0
+                settings put system gb_boosting 0
                 setprop persist.sys.performance.level 0
                 setprop sys.miui.feas.enable 0
+                setprop persist.vendor.power.feas.enable 0
             """.trimIndent()
             Shell.run(script)
             "WildBoost & FEAS Restored to Stock"
@@ -758,9 +759,9 @@ EOF
                 PUBG_PID=${'$'}(pidof $g)
                 if [ ! -z "${'$'}PUBG_PID" ]; then
                     am set-standby-bucket $g active
-                    cmd device_config put activity_manager_native_boot use_freezer true
-                    echo "${'$'}PUBG_PID" > /sys/fs/cgroup/uid_0/cgroup.procs 2>/dev/null
+                    cmd activity set-inactive $g false 2>/dev/null
                 fi
+                cmd device_config put activity_manager_native_boot use_freezer true
                 settings put global cached_apps_freezer enabled
                 setprop persist.sys.millet.handshake 1
                 setprop persist.sys.millet.enable 1
@@ -1375,10 +1376,14 @@ EOF
         val g = safeGame(game)
         val script = """
             dumpsys battery | grep -E 'temperature|level|voltage'
+            cmd game get $g 2>/dev/null
+            getprop vendor.gpu.control.level 2>/dev/null
+            settings get system peak_refresh_rate 2>/dev/null
+            getprop debug.sf.latch_unsignaled 2>/dev/null
+            pidof $g 2>/dev/null
+            dumpsys thermalservice | grep -i 'mStatus' | head -1
             cat /sys/class/kgsl/kgsl-3d0/gpubusy 2>/dev/null
             cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null
-            pidof $g
-            dumpsys thermalservice | grep -i 'mStatus' | head -1
         """.trimIndent()
         val raw = Shell.run(script)
         "=== HYPEROS 3 & SNAPDRAGON TELEMETRY ===\n$raw"
@@ -1413,9 +1418,9 @@ EOF
     ): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
         val finalFps = if (fps > 120) 120 else fps
-        val cfgDir = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
-        val userCustomPath = "$cfgDir/UserCustom.ini"
-        val enjoyPath = "$cfgDir/EnjoyCJZC.ini"
+        val cfgDir1 = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
+        val cfgDir2 = "/storage/emulated/0/Android/data/$g/$CONFIG_SUFFIX"
+        val cfgDir3 = "/data/media/0/Android/data/$g/$CONFIG_SUFFIX"
 
         val lodBias = when (potatoLevel) {
             "Low (LOD +1)" -> 1
@@ -1523,19 +1528,21 @@ EOF
         }
 
         val script = buildString {
-            appendLine("mkdir -p '$cfgDir'")
-            appendLine("chmod 0666 '$userCustomPath' 2>/dev/null")
-            appendLine("chmod 0666 '$enjoyPath' 2>/dev/null")
-            appendLine("cat << 'EOF' > '$userCustomPath'")
+            appendLine("for DIR in '$cfgDir1' '$cfgDir2' '$cfgDir3'; do")
+            appendLine("  mkdir -p \"\$DIR\"")
+            appendLine("  chmod 0666 \"\$DIR/UserCustom.ini\" 2>/dev/null")
+            appendLine("  chmod 0666 \"\$DIR/EnjoyCJZC.ini\" 2>/dev/null")
+            appendLine("  cat << 'EOF' > \"\$DIR/UserCustom.ini\"")
             appendLine(fullIni)
             appendLine("EOF")
-            appendLine("cat << 'EOF' > '$enjoyPath'")
+            appendLine("  cat << 'EOF' > \"\$DIR/EnjoyCJZC.ini\"")
             appendLine(fullIni)
             appendLine("EOF")
             if (readOnlyLock) {
-                appendLine("chmod 0444 '$userCustomPath' 2>/dev/null")
-                appendLine("chmod 0444 '$enjoyPath' 2>/dev/null")
+                appendLine("  chmod 0444 \"\$DIR/UserCustom.ini\" 2>/dev/null")
+                appendLine("  chmod 0444 \"\$DIR/EnjoyCJZC.ini\" 2>/dev/null")
             }
+            appendLine("done")
         }
         Shell.run(script)
 
@@ -1548,10 +1555,14 @@ EOF
 
     suspend fun unlockGraphicsConfig(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
-        val cfgDir = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
+        val cfgDir1 = "/sdcard/Android/data/$g/$CONFIG_SUFFIX"
+        val cfgDir2 = "/storage/emulated/0/Android/data/$g/$CONFIG_SUFFIX"
+        val cfgDir3 = "/data/media/0/Android/data/$g/$CONFIG_SUFFIX"
         val script = """
-            chmod 0666 '$cfgDir/UserCustom.ini' 2>/dev/null
-            chmod 0666 '$cfgDir/EnjoyCJZC.ini' 2>/dev/null
+            for DIR in '$cfgDir1' '$cfgDir2' '$cfgDir3'; do
+                chmod 0666 "${'$'}DIR/UserCustom.ini" 2>/dev/null
+                chmod 0666 "${'$'}DIR/EnjoyCJZC.ini" 2>/dev/null
+            done
         """.trimIndent()
         Shell.run(script)
         "🔓 Graphics Config Unlocked! You can now adjust graphics in-game."
@@ -1864,6 +1875,7 @@ EOF
             setprop debug.sf.auto_latch_unsignaled 0
             setprop debug.sf.disable_backpressure 0
             setprop debug.hwui.render_dirty_regions true
+            settings put system night_charging 0
             echo 0 > /sys/class/power_supply/battery/input_suspend 2>/dev/null
         """.trimIndent()
         Shell.run(revertScript)
@@ -1882,7 +1894,13 @@ EOF
     }
 
     suspend fun grantOverlay(pkg: String): String = withContext(Dispatchers.IO) {
-        Shell.run("appops set $pkg SYSTEM_ALERT_WINDOW allow").ifBlank { "Overlay permission granted via Shizuku" }
+        Shell.run("cmd appops set $pkg SYSTEM_ALERT_WINDOW allow 2>/dev/null; appops set $pkg SYSTEM_ALERT_WINDOW allow 2>/dev/null")
+        val check = Shell.run("cmd appops get $pkg SYSTEM_ALERT_WINDOW 2>/dev/null")
+        if (check.contains("allow", ignoreCase = true)) {
+            "Overlay permission ACTIVE (SYSTEM_ALERT_WINDOW allowed)"
+        } else {
+            "Overlay permission command sent for $pkg"
+        }
     }
 
     suspend fun launchFloatingMiniApp(pkg: String = "com.whatsapp"): String = withContext(Dispatchers.IO) {

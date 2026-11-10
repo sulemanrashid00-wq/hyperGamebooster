@@ -610,6 +610,7 @@ fun App() {
                                     scope.launch {
                                         val res = Actions.applyRedMagicGodMode(selectedGame)
                                         statusLog = "✅ $res"
+                                        Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1744)),
@@ -661,6 +662,7 @@ fun App() {
                                     scope.launch {
                                         val res = Actions.applyMagneticAimAndHitReg(selectedGame)
                                         statusLog = "✅ $res"
+                                        Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
@@ -710,6 +712,7 @@ fun App() {
                                         val elapsed = System.currentTimeMillis() - t0
                                         btnBoostText = "✅ 120 FPS LOCKED IN ${elapsed}ms!"
                                         statusLog = "✅ 120 FPS LOCKED IN ${elapsed}ms!\n$res"
+                                        Toast.makeText(ctx, "✅ 120 FPS LOCKED IN ${elapsed}ms!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
@@ -766,6 +769,7 @@ fun App() {
                                     val elapsed = System.currentTimeMillis() - t0
                                     btnLaunchText = "✅ LAUNCHED IN ${elapsed}ms!"
                                     statusLog = "🚀 Launched in ${elapsed}ms | $launchRes"
+                                    Toast.makeText(ctx, "🚀 Launched in ${elapsed}ms | $launchRes", Toast.LENGTH_SHORT).show()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D00)),
                                 shape = RoundedCornerShape(10.dp)
@@ -781,6 +785,7 @@ fun App() {
                                     scope.launch {
                                         val res = Actions.clearPowerKeeperJoyoseWebViewData()
                                         statusLog = "✅ $res"
+                                        Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2836)),
@@ -1099,6 +1104,7 @@ fun App() {
                                 scope.launch {
                                     val res = Actions.applyMethodBAutomatedIpadResizer(selectedGame)
                                     statusLog = "✅ $res"
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100)),
@@ -1415,6 +1421,7 @@ fun App() {
                                 scope.launch {
                                     val res = Actions.applyRedMagicInstantActionSpeed(selectedGame)
                                     statusLog = "✅ $res"
+                                    Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1744)),
@@ -1437,6 +1444,7 @@ fun App() {
                             scope.launch {
                                 val res = Actions.applyMagneticAimAndHitReg(selectedGame)
                                 statusLog = "✅ $res"
+                                Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
@@ -1666,8 +1674,11 @@ fun App() {
                                 FilterChip(
                                     selected = selectedAudioPreset == presetId,
                                     onClick = {
+                                        triggerVibe(ctx)
                                         selectedAudioPreset = presetId
-                                        statusLog = AudioTest.applyPreset(presetId)
+                                        val res = AudioTest.applyPreset(presetId)
+                                        statusLog = res
+                                        Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                     },
                                     label = { Text(label, fontSize = 11.sp) }
                                 )
@@ -1675,10 +1686,18 @@ fun App() {
                         }
                         Text("Stereo Channel Verification (520Hz Left / 780Hz Right):", color = Color.White, fontSize = 12.sp)
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(modifier = Modifier.weight(1f), onClick = { AudioTest.play(0) }) {
+                            Button(modifier = Modifier.weight(1f), onClick = {
+                                triggerVibe(ctx)
+                                AudioTest.play(0)
+                                Toast.makeText(ctx, "🔊 Playing LEFT Channel Tone (520Hz)", Toast.LENGTH_SHORT).show()
+                            }) {
                                 Text("Test LEFT Channel")
                             }
-                            Button(modifier = Modifier.weight(1f), onClick = { AudioTest.play(1) }) {
+                            Button(modifier = Modifier.weight(1f), onClick = {
+                                triggerVibe(ctx)
+                                AudioTest.play(1)
+                                Toast.makeText(ctx, "🔊 Playing RIGHT Channel Tone (780Hz)", Toast.LENGTH_SHORT).show()
+                            }) {
                                 Text("Test RIGHT Channel")
                             }
                         }
