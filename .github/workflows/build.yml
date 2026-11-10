@@ -25,7 +25,10 @@ jobs:
           gradle-version: "8.7"
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+        shell: bash
+        run: |
+          set -e -o pipefail
+          gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Upload build log
         if: always()
