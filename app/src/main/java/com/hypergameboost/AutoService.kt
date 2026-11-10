@@ -160,11 +160,13 @@ class AutoService : Service() {
                     Actions.pinGameProcess(game)
                     Actions.lockHardware120HzDisplayMode()
 
-                    // 4. Laptop FxSound 200% Audio Overdrive & DAC Protection
-                    if (audioOverdrive) {
-                        AudioTest.applyLaptopAudioOverdrive(this@AutoService, true, audioVol, audioStep)
+                    // 4. Pure Clean Volume Boost & DAC Protection
+                    val cleanBoost = sp.getBoolean("clean_boost_$game", true)
+                    val cleanPct = sp.getInt("clean_boost_pct_$game", 40)
+                    if (cleanBoost) {
+                        AudioTest.setCleanVolumeBoost(this@AutoService, true, cleanPct)
                         Actions.applyAudioAndDacFix(true)
-                        Actions.setSystemVolumeOverdriveShizuku(audioVol)
+                        Actions.setSystemVolumeOverdriveShizuku(cleanPct)
                     }
                 }
 
@@ -178,7 +180,7 @@ class AutoService : Service() {
                 }
             } else if (wasGameRunning) {
                 // Game closed! Restore stock settings automatically
-                AudioTest.applyLaptopAudioOverdrive(this@AutoService, false)
+                AudioTest.setCleanVolumeBoost(this@AutoService, false, 0)
                 Actions.applyAudioAndDacFix(false)
                 Actions.revertAll(game)
                 NativeTools.stopAdpfSession()

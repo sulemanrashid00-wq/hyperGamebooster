@@ -577,22 +577,26 @@ class OverlayService : Service() {
         // Row 5: AMOLED AFK Lock & Tactical Audio Preset
         val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
-        row5.addView(createCyberBtn("🎧 Audio: ${audioPresetName()}") {
-            val next = (AudioTest.activePreset + 1) % 5
-            val msg = AudioTest.applyPreset(this@OverlayService, next)
-            (it as? Button)?.text = "🎧 Audio: ${audioPresetName()}"
+        // Row 5: AMOLED AFK Lock & Clean Boost Toggle
+        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row5.addView(createCyberBtn("🌙 AFK Lock") { showAfk() })
+        row5.addView(createCyberBtn(if (AudioTest.isCleanBoostActive) "🔊 Boost: ON" else "🔊 Boost: OFF") {
+            val next = !AudioTest.isCleanBoostActive
+            val pct = if (next) 40 else 0
+            val msg = AudioTest.setCleanVolumeBoost(this@OverlayService, next, pct)
+            (it as? Button)?.text = if (next) "🔊 Boost: ON" else "🔊 Boost: OFF"
             Toast.makeText(this@OverlayService, msg, Toast.LENGTH_SHORT).show()
         })
         dock.addView(row5)
 
-        // Row 5b: 🔊 Volume Overdrive (100% | 150% | 175% | 200% MAX)
+        // Row 5b: 🔊 Clean Volume: [OFF] [+30%] [+60%] [+100%]
         val rowVol = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(4, 4, 4, 4)
         }
         val volTitle = TextView(this).apply {
-            text = "🔊 Vol: "
+            text = "🔊 "
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 10f
             setPadding(4, 0, 4, 0)
@@ -600,7 +604,7 @@ class OverlayService : Service() {
         rowVol.addView(volTitle)
 
         val volButtons = mutableListOf<Button>()
-        listOf(100 to "100%", 150 to "150%", 175 to "175%", 200 to "200%🔥").forEach { (pct, label) ->
+        listOf(0 to "OFF", 30 to "+30%", 60 to "+60%", 100 to "+100%").forEach { (pct, label) ->
             val btn = Button(this).apply {
                 text = label
                 textSize = 9f
@@ -610,16 +614,15 @@ class OverlayService : Service() {
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                     setMargins(2, 0, 2, 0)
                 }
-                val isSelected = AudioTest.currentVolumePercent == pct && AudioTest.isOverdriveEnabled
+                val isSelected = (pct == 0 && !AudioTest.isCleanBoostActive) || (AudioTest.isCleanBoostActive && AudioTest.currentBoostPercent == pct)
                 setBackgroundColor(if (isSelected) Color.parseColor("#00C853") else Color.parseColor("#1E2836"))
                 setTextColor(if (isSelected) Color.BLACK else Color.WHITE)
                 setOnClickListener {
                     triggerHaptic(25)
-                    val res = AudioTest.applyLaptopAudioOverdrive(
+                    val res = AudioTest.setCleanVolumeBoost(
                         this@OverlayService,
-                        enable = true,
-                        volumePercent = pct,
-                        footstepDb = if (pct == 200) 8 else AudioTest.currentFootstepDb
+                        enable = pct > 0,
+                        boostPercent = pct
                     )
                     scope.launch {
                         Actions.setSystemVolumeOverdriveShizuku(pct)
@@ -1386,9 +1389,9 @@ class OverlayService : Service() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 8, 0, 0)
         }
-        var footstepOn = false
-        val footstepBtn = Button(this).apply {
-            text = "🎧 Footstep EQ: OFF"
+        var boostOn = AudioTest.isCleanBoostActive
+        val volBtn = Button(this).apply {
+            text = if (boostOn) "🔊 Vol: ON" else "🔊 Vol: OFF"
             textSize = 9f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.argb(220, 20, 32, 48))
@@ -1400,12 +1403,12 @@ class OverlayService : Service() {
             }
             setOnClickListener {
                 triggerHaptic(25)
-                footstepOn = !footstepOn
-                text = if (footstepOn) "🎧 Footstep EQ: ON" else "🎧 Footstep EQ: OFF"
-                scope.launch { AudioTest.applyPreset(if (footstepOn) 1 else 0) }
+                boostOn = !boostOn
+                text = if (boostOn) "🔊 Vol: ON" else "🔊 Vol: OFF"
+                scope.launch { AudioTest.setCleanVolumeBoost(this@OverlayService, boostOn, if (boostOn) 40 else 0) }
             }
         }
-        toggleRow.addView(footstepBtn)
+        toggleRow.addView(volBtn)
 
         val bypassBtn = Button(this).apply {
             text = if (Actions.isBypassChargingOn) "🔌 Bypass: ON" else "🔌 Bypass: OFF"

@@ -1703,8 +1703,8 @@ EOF
         }
     }
 
-    suspend fun setSystemVolumeOverdriveShizuku(volumePercent: Int): String = withContext(Dispatchers.IO) {
-        val streamVol = if (volumePercent >= 100) 15 else (volumePercent * 15 / 100).coerceIn(0, 15)
+    suspend fun setSystemVolumeOverdriveShizuku(volumePercent: Int = 100): String = withContext(Dispatchers.IO) {
+        val streamVol = 15
         val script = """
             cmd media_session volume --stream 3 --set $streamVol 2>/dev/null
             settings put system volume_music_speaker $streamVol 2>/dev/null
@@ -1716,51 +1716,31 @@ EOF
             settings put system music_in_communication 1
         """.trimIndent()
         Shell.run(script)
-        "🔊 Hardware Stream Locked to 100% ($streamVol/15) + Safe Volume Bypassed"
+        "🔊 Hardware Stream Volume Locked to 100% ($streamVol/15) + Safe Cap Bypassed"
     }
 
     suspend fun applyAudioAndDacFix(enable: Boolean = true): String = withContext(Dispatchers.IO) {
         if (enable) {
             val script = """
-                setprop audio.offload.disable 1
-                setprop vendor.audio.offload.track.enable false
-                setprop audio.deep_buffer.media false
-                setprop debug.stagefright.ccodec_delayed_params 1
                 settings put global audio_safe_volume_state 2
                 settings put secure audio_safe_volume_state 2
                 settings put system peak_volume_mode 1
                 settings put secure music_in_communication 1
                 settings put system music_in_communication 1
-                setprop audio.safemedia.bypass true
-                setprop persist.vendor.audio.fluence.voicecall false
                 settings put global usb_audio_automatic_routing_disabled 0
                 settings put secure usb_audio_automatic_routing_disabled 0
-                settings put system miui_audio_dump_enable 0
-                settings put system sound_effects_enabled 0
-                settings put system k2hd_effect 1
-                settings put system tube_amp_effect 1
-                settings put system dolby_enable 1
-                settings put global apm_enhancement_enabled 1
                 setprop debug.audio.usb.period_us 2500
-                setprop debug.bluetooth.low_latency true
-                setprop vendor.audio.lowlatency.enable true
-                setprop media.stagefright.low-latency 1
-                settings put global bluetooth_disable_absolute_volume 1
                 cmd media_session volume --stream 3 --set 15 2>/dev/null
             """.trimIndent()
             Shell.run(script)
-            "🎧 FxSound Audio DSP Uncapped, Mic Ducking Disabled & DAC Protected"
+            "🎧 Clean Audio & USB Type-C DAC Splitter Stability ACTIVE"
         } else {
             val script = """
-                setprop audio.offload.disable 0
-                setprop audio.deep_buffer.media true
                 settings put system music_in_communication 0
                 settings put secure music_in_communication 0
-                setprop persist.vendor.audio.fluence.voicecall true
-                setprop audio.safemedia.bypass false
             """.trimIndent()
             Shell.run(script)
-            "Audio Latency & DAC Restored to Stock"
+            "Audio & DAC Restored to Stock"
         }
     }
 

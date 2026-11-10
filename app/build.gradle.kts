@@ -12,7 +12,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 12
-        versionName = "11.0-LaptopAudioGod"
+        versionName = "11.1-CleanVolume"
     }
 
     buildTypes {
