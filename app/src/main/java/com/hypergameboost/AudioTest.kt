@@ -91,7 +91,11 @@ object AudioTest {
                     override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
                         var hasNew = false
                         configs?.forEach { cfg ->
-                            val sid = cfg.clientAudioSessionId
+                            val sid = try {
+                                val m = cfg.javaClass.getDeclaredMethod("getClientAudioSessionId")
+                                m.isAccessible = true
+                                (m.invoke(cfg) as? Number)?.toInt() ?: 0
+                            } catch (_: Throwable) { 0 }
                             if (sid > 0 && !activeSessionIds.contains(sid)) {
                                 synchronized(AudioTest) {
                                     activeSessionIds.add(sid)

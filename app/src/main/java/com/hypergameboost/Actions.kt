@@ -1114,24 +1114,25 @@ EOF
     // =========================================================================
     // 5. ULTRA-FAST SAFE DE-BLOAT & 12GB LPDDR5X ZERO-SWAP ENGINE
     // =========================================================================
+    val BLOAT_PACKAGES = listOf(
+        "de.szalkowski.activitylauncher", "com.docx.word.excel.ppt.pdf.document.reader", "com.a0soft.gphone.app2sd",
+        "com.b612.android.activity", "me.piebridge.brevent", "com.jpro.casiocalc", "com.capcut.android.tools",
+        "com.openai.chatgpt", "com.android.chrome", "com.anthropic.claudeforandroid", "com.daraz.android",
+        "com.pnikosis.pmyouthhub", "com.facebook.katana", "com.foodpanda.android", "com.google.android.apps.docs",
+        "com.google.android.apps.photos", "com.google.android.apps.bard", "com.google.android.gm",
+        "com.google.android.googlequicksearchbox", "com.instagram.android", "com.internee.app", "com.google.android.keep",
+        "com.google.android.apps.lens", "com.adobe.lrmobile", "com.linkedin.android", "com.google.android.apps.maps",
+        "com.google.android.apps.tachyon", "com.docx.word.excel.ppt.pdf.document.reader.editor", "com.melStudio.MovieBox",
+        "com.olx.pk", "com.microsoft.office.outlook", "com.adobe.reader", "com.picsart.studio", "com.pikas.show.official",
+        "com.android.vending", "com.playit.videoplayer", "com.supervpn.vpn", "com.surfflix.app", "com.microsoft.teams",
+        "org.telegram.messenger", "com.zhiliaoapp.musically", "com.vng.vpnindia", "com.wps.moffice", "com.yango.rider",
+        "com.google.android.youtube", "com.zarchiver.pro", "com.miui.personalassistant", "com.miui.contentextension",
+        "com.miui.voiceassist", "com.miui.hybrid", "com.xiaomi.market", "com.miui.analytics", "com.miui.msa.global",
+        "com.miui.Video", "com.xiaomi.mipicks"
+    )
+
     fun safeDeepPhoneDebloat(): String {
-        val apps = listOf(
-            "de.szalkowski.activitylauncher", "com.docx.word.excel.ppt.pdf.document.reader", "com.a0soft.gphone.app2sd",
-            "com.b612.android.activity", "me.piebridge.brevent", "com.jpro.casiocalc", "com.capcut.android.tools",
-            "com.openai.chatgpt", "com.android.chrome", "com.anthropic.claudeforandroid", "com.daraz.android",
-            "com.pnikosis.pmyouthhub", "com.facebook.katana", "com.foodpanda.android", "com.google.android.apps.docs",
-            "com.google.android.apps.photos", "com.google.android.apps.bard", "com.google.android.gm",
-            "com.google.android.googlequicksearchbox", "com.instagram.android", "com.internee.app", "com.google.android.keep",
-            "com.google.android.apps.lens", "com.adobe.lrmobile", "com.linkedin.android", "com.google.android.apps.maps",
-            "com.google.android.apps.tachyon", "com.docx.word.excel.ppt.pdf.document.reader.editor", "com.melStudio.MovieBox",
-            "com.olx.pk", "com.microsoft.office.outlook", "com.adobe.reader", "com.picsart.studio", "com.pikas.show.official",
-            "com.android.vending", "com.playit.videoplayer", "com.supervpn.vpn", "com.surfflix.app", "com.microsoft.teams",
-            "org.telegram.messenger", "com.zhiliaoapp.musically", "com.vng.vpnindia", "com.wps.moffice", "com.yango.rider",
-            "com.google.android.youtube", "com.zarchiver.pro", "com.miui.personalassistant", "com.miui.contentextension",
-            "com.miui.voiceassist", "com.miui.hybrid", "com.xiaomi.market", "com.miui.analytics", "com.miui.msa.global",
-            "com.miui.Video", "com.xiaomi.mipicks"
-        )
-        val cmds = apps.map { "am force-stop $it 2>/dev/null" }
+        val cmds = BLOAT_PACKAGES.map { "am force-stop $it 2>/dev/null" }
         Shell.runBatch(cmds)
         return "🛡️ Terminated 46+ Background Resource Hogs Successfully!"
     }
