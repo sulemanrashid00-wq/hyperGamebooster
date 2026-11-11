@@ -241,6 +241,8 @@ fun TouchSamplingPad() {
 @Composable
 fun App() {
     val ctx = LocalContext.current
+    AppPrefs.init(ctx)
+    AudioTest.init(ctx)
     val sp = remember { ctx.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -502,7 +504,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v11.2 REALME DOLBY GOD-TIER",
+                        "v12.0 TRUE FUNCTIONAL",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -606,6 +608,36 @@ fun App() {
                                 color = Color(0xFF90A4AE),
                                 fontSize = 11.sp
                             )
+
+                            // v12.0 1-Tap Real System Self-Test & 8-Engine Live Diagnostic Button
+                            Button(
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    statusLog = "🔬 Running 8-Engine Live System Diagnostic..."
+                                    scope.launch {
+                                        val report = Actions.runSystemDiagnostic(selectedGame)
+                                        statusLog = report
+                                        Toast.makeText(ctx, "Self-Test Finished! Check report in console.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EA)),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.5.dp, Color(0xFF00E5FF))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("🔬", fontSize = 16.sp)
+                                    Text(
+                                        "RUN REAL SYSTEM SELF-TEST (VERIFY ALL 8 ENGINES)",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.5.sp
+                                    )
+                                }
+                            }
 
                             // v10.0 RedMagic God-Mode Hero Button
                             Button(
@@ -1241,11 +1273,11 @@ fun App() {
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
-                                "800x600 (0.55)" to ("800x600" to "0.55"),
-                                "960x540 (0.65)" to ("960x540" to "0.65"),
-                                "1280x720 (0.75)" to ("1280x720" to "0.75"),
-                                "1440x720 (0.85)" to ("1440x720" to "0.85"),
-                                "1080p (1.0)" to ("1920x1080" to "1.0")
+                                "800x600 (Ultra Potato 0.55)" to ("800x600" to "0.55"),
+                                "960x540 (Smooth Potato 0.65)" to ("960x540" to "0.65"),
+                                "1280x720 (HD Smooth 0.75)" to ("1280x720" to "0.75"),
+                                "1440x720 (Balanced 0.85)" to ("1440x720" to "0.85"),
+                                "Native 1.5K (Stock)" to ("2712x1220" to "disable")
                             ).forEach { (label, pair) ->
                                 val (res, scale) = pair
                                 FilterChip(
@@ -1612,6 +1644,9 @@ fun App() {
                                         val res = Actions.applyHardwareDolbyAtmosPreset(pId)
                                         statusLog = res
                                         Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                        if (pId > 0) {
+                                            try { ctx.startForegroundService(Intent(ctx, OverlayService::class.java).putExtra("game", selectedGame)) } catch (_: Throwable) {}
+                                        }
                                     },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (isSelected) Color(0xFF00FF66) else Color(0xFF1E2836)
@@ -1720,6 +1755,7 @@ fun App() {
                                     val res = AudioTest.setCleanVolumeBoost(ctx, true, cleanBoostPercent)
                                     statusLog = res
                                     Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    try { ctx.startForegroundService(Intent(ctx, OverlayService::class.java).putExtra("game", selectedGame)) } catch (_: Throwable) {}
                                     scope.launch {
                                         Actions.applyAudioAndDacFix(true)
                                         Actions.setSystemVolumeOverdriveShizuku(cleanBoostPercent)

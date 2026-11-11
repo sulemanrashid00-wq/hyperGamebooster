@@ -113,6 +113,8 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        AppPrefs.init(this)
+        AudioTest.init(this)
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         AudioTest.startSonicRadar()
     }
@@ -155,7 +157,7 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Esports Overlay", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v11.2 Active")
+            .setContentTitle("HyperGameBooster v12.0 Active")
             .setContentText("Magnetic Aim & 2560Hz Touch Engine Running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)

@@ -33,7 +33,7 @@ object Shell {
         hasRoot?.let { return it }
         val found = try {
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
-            val out = safeExecute(p, 1)
+            val out = safeExecute(p, 2)
             out.contains("uid=0")
         } catch (_: Throwable) {
             false
@@ -43,21 +43,30 @@ object Shell {
     }
 
     /**
-     * Executes process with non-blocking async stream reader & strict 4-second timeout.
-     * Prevents any deadlock if Shizuku binder or child command hangs!
+     * Executes process with non-blocking async stream reader for BOTH stdout and stderr,
+     * with strict 6-second timeout. Prevents any buffer saturation or deadlock!
      */
-    private fun safeExecute(p: Process, timeoutSeconds: Long = 4): String {
+    private fun safeExecute(p: Process, timeoutSeconds: Long = 6): String {
         try {
             p.outputStream.close()
         } catch (_: Throwable) {}
 
-        var output = ""
-        val readThread = Thread {
+        var stdout = ""
+        var stderr = ""
+
+        val outThread = Thread {
             try {
-                output = p.inputStream.bufferedReader().use { it.readText() }
+                stdout = p.inputStream.bufferedReader().use { it.readText() }
             } catch (_: Throwable) {}
         }
-        readThread.start()
+        val errThread = Thread {
+            try {
+                stderr = p.errorStream.bufferedReader().use { it.readText() }
+            } catch (_: Throwable) {}
+        }
+
+        outThread.start()
+        errThread.start()
 
         val exited = try {
             p.waitFor(timeoutSeconds, TimeUnit.SECONDS)
@@ -72,17 +81,27 @@ object Shell {
         }
 
         try {
-            readThread.join(250)
+            outThread.join(350)
+            errThread.join(350)
         } catch (_: Throwable) {}
 
-        return output.trim()
+        val trimmedOut = stdout.trim()
+        val trimmedErr = stderr.trim()
+
+        return when {
+            trimmedOut.isNotEmpty() && trimmedErr.isNotEmpty() -> "$trimmedOut\n$trimmedErr"
+            trimmedOut.isNotEmpty() -> trimmedOut
+            else -> trimmedErr
+        }
     }
 
     /**
-     * Executes shell command at maximum speed with zero blocking overhead.
+     * Executes shell command sequentially with guaranteed wait completion.
      */
     fun run(cmd: String): String {
         if (cmd.isBlank()) return ""
+
+        val script = "$cmd\nwait\n"
 
         // 1. Shizuku Binder Process Execution (High-speed reflection)
         if (ShizukuState.current() == ShizukuState.READY) {
@@ -94,9 +113,9 @@ object Shell {
                     String::class.java
                 )
                 m.isAccessible = true
-                val p = m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as? Process
+                val p = m.invoke(null, arrayOf("sh", "-c", script), null, null) as? Process
                 if (p != null) {
-                    return safeExecute(p, 4)
+                    return safeExecute(p, 6)
                 }
             } catch (_: Throwable) {
                 // Fallback to local execution
@@ -106,8 +125,8 @@ object Shell {
         // 2. Root (su) Fallback
         if (isRootAvailable()) {
             try {
-                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-                return safeExecute(p, 4)
+                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", script))
+                return safeExecute(p, 6)
             } catch (_: Throwable) {
                 // Fallback to standard sh
             }
@@ -115,29 +134,22 @@ object Shell {
 
         // 3. Standard Runtime Exec Fallback
         return try {
-            val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
-            safeExecute(p, 3)
+            val p = Runtime.getRuntime().exec(arrayOf("sh", "-c", script))
+            safeExecute(p, 5)
         } catch (e: Throwable) {
             "ERR: ${e.message}"
         }
     }
 
     /**
-     * Executes a batch of commands combined into a single fast atomic subshell script with 2>/dev/null.
+     * Executes a batch of sequential commands combined into a single atomic script.
      */
     fun runBatch(cmds: List<String>): String {
         if (cmds.isEmpty()) return ""
         val cleanCmds = cmds.filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
         if (cleanCmds.isEmpty()) return ""
 
-        val combinedScript = cleanCmds.joinToString("\n") { cmd ->
-            val trimmed = cmd.trim()
-            if (!trimmed.endsWith("&") && !trimmed.contains("2>/dev/null") && !trimmed.endsWith("fi") && !trimmed.endsWith("done")) {
-                "$trimmed 2>/dev/null"
-            } else {
-                trimmed
-            }
-        }
+        val combinedScript = cleanCmds.joinToString("\n") { it.trim() }
         return run(combinedScript)
     }
 
