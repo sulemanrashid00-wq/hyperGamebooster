@@ -157,7 +157,7 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Esports Overlay", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v13.0 Active")
+            .setContentTitle("HyperGameBooster v13.1 Active")
             .setContentText("Magnetic Aim & 2560Hz Touch Engine Running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
@@ -1528,7 +1528,7 @@ class OverlayService : Service() {
                 scope.launch {
                     Actions.clearPowerKeeperJoyoseWebViewData()
                     ui.post {
-                        Toast.makeText(this@OverlayService, "🧹 PowerKeeper, Joyose & WebView Cleared!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@OverlayService, "🧹 Joyose & WebView Cleared!", Toast.LENGTH_SHORT).show()
                     }
                 }
             }

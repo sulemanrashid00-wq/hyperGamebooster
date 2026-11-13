@@ -23,13 +23,14 @@ object Games {
 }
 
 /**
- * Actions - Ultra-Optimized Esports Engine (v13.0 Clean One-Click Edition)
+ * Actions - Ultra-Optimized Esports Engine (v13.1 Esports Pro Edition)
  * Engineered for Redmi Turbo 4 Pro (Snapdragon 8s Gen 4, Android 16, HyperOS 3)
  */
 object Actions {
 
     @Volatile var isBypassChargingOn: Boolean = false
     @Volatile var isMagnifierOn: Boolean = false
+    @Volatile var isEsportsDndOn: Boolean = false
 
     fun quickLagAndPingFlush(game: String = "com.tencent.ig"): String {
         Shell.run("cmd netd resolver flushdefaultif 2>/dev/null\ncmd wifi force-low-latency-mode enabled 2>/dev/null")
@@ -39,7 +40,7 @@ object Actions {
     fun applyHotdropOverdrive(game: String, enable: Boolean): String {
         return if (enable) {
             applyOneClickMaxBoost(game)
-            "🚀 Hotdrop Overdrive ACTIVE (120Hz + 2560Hz Touch)"
+            "🚀 Hotdrop Overdrive ACTIVE (120Hz + 2560Hz Touch + Cores fc)"
         } else {
             "Hotdrop Overdrive Off"
         }
@@ -123,12 +124,17 @@ object Actions {
         val g = safeGame(pkg)
         val script = """
             service call SurfaceFlinger 1035 i32 -1
+            service call SurfaceFlinger 1008 i32 1
             cmd display clear-user-preferred-display-mode
             settings put system min_refresh_rate 120.0
             settings put system peak_refresh_rate 120.0
             settings put secure user_refresh_rate 120
             settings put secure miui_refresh_rate 120
             settings put system is_smart_fps 0
+            settings put system thermal_refresh_rate_cap 120
+            settings put system display_max_refresh_rate 120
+            settings put system min_refresh_rate_cap 120
+            settings put system frame_rate_multiple_threshold 120
             cmd game mode 2 $g
             cmd game set --mode 2 --downscale disable --fps 120 $g
             device_config delete game_overlay $g 2>/dev/null
@@ -149,17 +155,57 @@ object Actions {
         val script = buildString {
             // 1. Release SurfaceFlinger stuck mode lock & enforce 120Hz hard-lock
             appendLine("service call SurfaceFlinger 1035 i32 -1")
+            appendLine("service call SurfaceFlinger 1008 i32 1")
             appendLine("cmd display clear-user-preferred-display-mode")
             appendLine("settings put system min_refresh_rate 120.0")
             appendLine("settings put system peak_refresh_rate 120.0")
             appendLine("settings put secure user_refresh_rate 120")
             appendLine("settings put secure miui_refresh_rate 120")
             appendLine("settings put system is_smart_fps 0")
+            appendLine("settings put system thermal_refresh_rate_cap 120")
+            appendLine("settings put system display_max_refresh_rate 120")
+            appendLine("settings put system min_refresh_rate_cap 120")
+            appendLine("settings put system frame_rate_multiple_threshold 120")
             appendLine("cmd game mode 2 $g")
             appendLine("cmd game set --mode 2 --downscale disable --fps 120 $g")
             appendLine("device_config delete game_overlay $g 2>/dev/null")
 
-            // 2. Unrestricted Battery & WakeLock
+            // 2. Qualcomm Adreno GPU & SurfaceFlinger Zero-Stutter Pipeline
+            appendLine("setprop debug.sf.disable_backpressure 1")
+            appendLine("setprop debug.sf.latch_unsignaled 1")
+            appendLine("setprop debug.sf.enable_gl_backpressure 0")
+            appendLine("setprop ro.surface_flinger.max_frame_buffer_acquired_buffers 3")
+            appendLine("setprop debug.egl.hw 1")
+            appendLine("setprop debug.sf.hw 1")
+            appendLine("setprop debug.hwui.renderer skiagl")
+            appendLine("setprop debug.renderengine.backend skiagl")
+            appendLine("setprop vendor.perf.gestureFlingBoost.enable 1")
+            appendLine("setprop vendor.perf.workloadclassifier.enable 1")
+            appendLine("cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 3 2>/dev/null")
+
+            // 3. HyperOS 3 Gaming Performance Flags & Thermal Throttling Defeat
+            appendLine("settings put system cloud_speed_mode 1")
+            appendLine("settings put system speed_mode 1")
+            appendLine("settings put secure speed_mode_enable 1")
+            appendLine("settings put system power_mode high")
+            appendLine("settings put system game_booster_mode 1")
+            appendLine("settings put system performance_mode 1")
+            appendLine("settings put secure game_mode 1")
+            appendLine("settings put system screen_optimize_mode 2")
+            appendLine("cmd thermalservice override-status 0")
+            appendLine("cmd power set-fixed-performance-mode-enabled true")
+            appendLine("setprop persist.sys.thermal.mitigation 0 2>/dev/null")
+            appendLine("setprop debug.thermal.throttle.disable 1 2>/dev/null")
+
+            // 4. Halt Joyose Throttler & Kill Background Bloat (Preserve PowerKeeper 120Hz Whitelist!)
+            appendLine("pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
+            appendLine("am force-stop com.xiaomi.joyose 2>/dev/null")
+            appendLine("cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null")
+            BLOAT_PACKAGES.forEach { b ->
+                appendLine("am force-stop $b 2>/dev/null")
+            }
+
+            // 5. Unrestricted Battery & WakeLock
             appendLine("dumpsys deviceidle whitelist +$g 2>/dev/null")
             appendLine("am set-standby-bucket $g 5 2>/dev/null")
             appendLine("cmd appops set $g RUN_IN_BACKGROUND allow 2>/dev/null")
@@ -167,20 +213,7 @@ object Actions {
             appendLine("cmd appops set $g WAKE_LOCK allow 2>/dev/null")
             appendLine("cmd appops set $g START_FOREGROUND allow 2>/dev/null")
 
-            // 3. Stop Joyose & Bloat (Preserve PowerKeeper 120Hz Whitelist!)
-            appendLine("pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
-            appendLine("am force-stop com.xiaomi.joyose 2>/dev/null")
-            appendLine("cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null")
-            appendLine("settings put system speed_mode 1")
-            appendLine("settings put secure speed_mode_enable 1")
-            appendLine("settings put system power_mode high")
-            appendLine("cmd thermalservice override-status 0")
-            appendLine("cmd power set-fixed-performance-mode-enabled true")
-            BLOAT_PACKAGES.forEach { b ->
-                appendLine("am force-stop $b 2>/dev/null")
-            }
-
-            // 4. 2560Hz Touch & 1000Hz Gyro Unbatching
+            // 6. 2560Hz Touch & 1000Hz Gyro Unbatching
             appendLine("settings put secure tap_duration_threshold 0.0")
             appendLine("settings put secure tap_duration_enabled 0")
             appendLine("settings put secure touch_blocking_period 0.0")
@@ -195,20 +228,41 @@ object Actions {
             appendLine("settings put system gb_touch_tap_stability 0")
             appendLine("settings put system gb_touch_aim_accuracy 100")
             appendLine("settings put system touch_slop 1")
+            appendLine("settings put system gb_touch_anti_mistouch 0")
+            appendLine("settings put system gb_touch_continuous_tap 100")
             appendLine("cmd device_config put input_native_boot resample_touch false 2>/dev/null")
             appendLine("cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null")
+            appendLine("cmd device_config put input_native_boot touch_jitter_filter false 2>/dev/null")
             appendLine("settings put secure high_sampling_rate_sensors_allowlist $g 2>/dev/null")
             appendLine("settings put secure game_mode_sensor_rate 1000 2>/dev/null")
+            appendLine("setprop persist.vendor.touch.sampling_rate 2560 2>/dev/null")
+            appendLine("setprop debug.input.touch.filter 0 2>/dev/null")
 
-            // 5. FastConnect Wi-Fi Low-Latency Lock
+            // 7. FastConnect Wi-Fi Low-Latency Lock & Radio Jitter Elimination
             appendLine("cmd wifi force-low-latency-mode enabled 2>/dev/null")
             appendLine("cmd wifi force-hi-perf-mode enabled 2>/dev/null")
             appendLine("settings put global wifi_scan_always_enabled 0")
+            appendLine("settings put global wifi_sleep_policy 2")
+            appendLine("settings put global mobile_data_always_on 0")
+            appendLine("settings put global network_avoid_bad_wifi 1")
+            appendLine("cmd netd resolver flushdefaultif 2>/dev/null")
+            appendLine("settings put global tcp_default_init_rwnd 60 2>/dev/null")
 
-            // 6. 12GB Zero-Swap RAM Pinning
+            // 8. 12GB Zero-Swap RAM Pinning & Cache Flush
             appendLine("cmd device_config put activity_manager use_compaction false 2>/dev/null")
             appendLine("settings put global ram_expand_size 0 2>/dev/null")
             appendLine("settings put system miui_memory_extension 0 2>/dev/null")
+            appendLine("sync")
+            appendLine("echo 3 > /proc/sys/vm/drop_caches 2>/dev/null")
+
+            // 9. Squad Mic Voice Ducking Prevention & Pure Audio Hooks
+            appendLine("setprop persist.vendor.audio.fluence.voicecall false 2>/dev/null")
+            appendLine("setprop persist.vendor.audio.fluence.voicerec false 2>/dev/null")
+            appendLine("setprop persist.vendor.audio.fluence.speaker false 2>/dev/null")
+            appendLine("settings put secure music_in_communication 1")
+            appendLine("setprop audio.offload.disable 1")
+            appendLine("setprop audio.deep_buffer.media false")
+            appendLine("settings put global audio_safe_volume_state 2")
         }
         Shell.run(script)
 
@@ -220,7 +274,7 @@ object Actions {
         val gmRead = Shell.run("cmd game get $g").trim()
         val joyoseRead = Shell.run("pidof com.xiaomi.joyose").trim()
 
-        return "⚡ 1-Click Max Boost ACTIVE! [120Hz: $hzRead | Game: $gmRead | Joyose: ${if (joyoseRead.isBlank()) "Dead ✅" else "PID $joyoseRead"} | Touch: 2560Hz | Wi-Fi: Low-Latency]"
+        return "⚡ 1-Click Max Boost ACTIVE! [120Hz: $hzRead | Game: $gmRead | Joyose: ${if (joyoseRead.isBlank()) "Dead ✅" else "PID $joyoseRead"} | Touch: 2560Hz | Wi-Fi: Low-Latency | Render Cores: fc]"
     }
 
     /**
@@ -253,6 +307,9 @@ object Actions {
             cmd wifi force-low-latency-mode disabled 2>/dev/null
             cmd thermalservice reset 2>/dev/null
             service call SurfaceFlinger 1022 f 1.0 2>/dev/null
+            settings put system heads_up_notifications_enabled 1 2>/dev/null
+            settings put global zen_mode 0 2>/dev/null
+            cmd statusbar expand-notifications true 2>/dev/null
         """.trimIndent()
         Shell.run(script)
 
@@ -279,7 +336,8 @@ object Actions {
             1 -> Triple("720x1600", "280", "🥔 720p Ultra-Potato (Max Smoothness & Zero Heat)")
             2 -> Triple("810x1800", "310", "🔥 810p Scrims (High FPS + Balanced Clarity)")
             3 -> Triple("900x2000", "350", "⚡ 900p Pro (Exact 20:9 Esports Ratio)")
-            4 -> Triple("1080x2160", "360", "📱 Stretched Hitbox (Wider Enemies + Cutout Bypass)")
+            4 -> Triple("1080x2160", "360", "📱 Stretched Hitbox 18:9 (Wider Enemies + Cutout Bypass)")
+            5 -> Triple("1200x1600", "300", "📟 iPad 4:3 Hitbox Ratio (Ultra-Wide Character Bodies)")
             else -> Triple("reset", "reset", "🔙 Native 1.5K Display (1220x2712 Stock)")
         }
 
@@ -291,7 +349,7 @@ object Actions {
                 settings put global policy_control null*
                 settings put global force_black_v2 0
             """.trimIndent()
-        } else if (preset == 4) {
+        } else if (preset == 4 || preset == 5) {
             """
                 wm size $sizeCmd
                 wm density $densityCmd
@@ -320,6 +378,10 @@ object Actions {
             "vivid" -> {
                 Shell.run("service call SurfaceFlinger 1022 f 1.5 2>/dev/null")
                 "👁️ Vivid Grass 1.5x Saturation Active"
+            }
+            "contrast" -> {
+                Shell.run("service call SurfaceFlinger 1022 f 1.25 2>/dev/null")
+                "👁️ High Contrast 1.25x Active (Crisp Enemies)"
             }
             "scout_invert" -> {
                 Shell.run("settings put secure accessibility_display_inversion_enabled 1 2>/dev/null")
@@ -364,10 +426,15 @@ object Actions {
             settings put system gb_touch_tap_stability 0
             settings put system gb_touch_aim_accuracy 100
             settings put system touch_slop 1
+            settings put system gb_touch_anti_mistouch 0
+            settings put system gb_touch_continuous_tap 100
             cmd device_config put input_native_boot resample_touch false 2>/dev/null
             cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null
+            cmd device_config put input_native_boot touch_jitter_filter false 2>/dev/null
             settings put secure high_sampling_rate_sensors_allowlist $g 2>/dev/null
             settings put secure game_mode_sensor_rate 1000 2>/dev/null
+            setprop persist.vendor.touch.sampling_rate 2560 2>/dev/null
+            setprop debug.input.touch.filter 0 2>/dev/null
         """.trimIndent()
         Shell.run(script)
         return "⚡ Max Touch + Aim Lock Active (2560Hz Polling + 0ms Tap Delay + 1000Hz Gyro)"
@@ -395,6 +462,7 @@ object Actions {
     fun applyHardwareDolbyAtmosPreset(presetId: Int): String {
         AudioTest.applyDolbyFootstepPreset(presetId)
         val script = buildString {
+            appendLine("setprop persist.vendor.audio.fluence.voicecall false 2>/dev/null")
             appendLine("setprop audio.offload.disable 1")
             appendLine("setprop audio.deep_buffer.media false")
             appendLine("settings put global audio_safe_volume_state 2")
@@ -414,6 +482,7 @@ object Actions {
             1 -> "🎧 Realme Dolby Gaming: Full Footstep Boost + 3D Sound Active"
             2 -> "🗣️ Dolby Voice / Scout: Pure Midrange Footsteps Active"
             3 -> "🌌 3D Spatial Radar: Surround Spatial Sound Active"
+            4 -> "⚡ IEM Hyper-Clarity: Pin-pull & Reload Boost Active"
             else -> "🔇 Dolby EQ Disabled (Stock Sound)"
         }
     }
@@ -427,7 +496,11 @@ object Actions {
             cmd wifi force-low-latency-mode enabled
             cmd wifi force-hi-perf-mode enabled
             settings put global wifi_scan_always_enabled 0
+            settings put global wifi_sleep_policy 2
+            settings put global mobile_data_always_on 0
+            settings put global network_avoid_bad_wifi 1
             cmd netd resolver flushdefaultif 2>/dev/null
+            settings put global tcp_default_init_rwnd 60 2>/dev/null
         """.trimIndent()
         Shell.run(script)
         val status = Shell.run("cmd wifi status").trim()
@@ -444,6 +517,10 @@ object Actions {
                 Shell.run("settings put global private_dns_mode hostname\nsettings put global private_dns_specifier dns.google\ncmd netd resolver flushdefaultif 2>/dev/null")
                 "🌐 Google 8.8.8.8 Gaming DNS Active"
             }
+            "adguard" -> {
+                Shell.run("settings put global private_dns_mode hostname\nsettings put global private_dns_specifier dns.adguard-dns.com\ncmd netd resolver flushdefaultif 2>/dev/null")
+                "🌐 AdGuard Fast Gaming DNS Active"
+            }
             else -> {
                 Shell.run("settings put global private_dns_mode off\ncmd netd resolver flushdefaultif 2>/dev/null")
                 "🌐 Private DNS Restored to Automatic/Stock"
@@ -452,7 +529,7 @@ object Actions {
     }
 
     // =========================================================================
-    // 6. GPU DRIVER & AOT COMPILATION
+    // 6. GPU DRIVER, THERMAL & ESPORTS DND
     // =========================================================================
 
     fun setGraphicsDriverType(pkg: String, driverType: String): String {
@@ -479,6 +556,33 @@ object Actions {
         return "⚡ AOT Speed Compilation Complete for $g (Zero Stutter Render)"
     }
 
+    fun setEsportsTournamentDnd(enable: Boolean): String {
+        isEsportsDndOn = enable
+        return if (enable) {
+            val script = """
+                settings put system heads_up_notifications_enabled 0
+                settings put global zen_mode 1
+                settings put secure miui_mirror_dnd 1
+                cmd statusbar expand-notifications false 2>/dev/null
+            """.trimIndent()
+            Shell.run(script)
+            "🛡️ Tournament Focus Mode ON (Zero heads-up alerts or drop-downs)"
+        } else {
+            val script = """
+                settings put system heads_up_notifications_enabled 1
+                settings put global zen_mode 0
+                cmd statusbar expand-notifications true 2>/dev/null
+            """.trimIndent()
+            Shell.run(script)
+            "🛡️ Tournament Focus Mode OFF"
+        }
+    }
+
+    fun applyThermalZeroOverride(): String {
+        Shell.run("cmd thermalservice override-status 0\ncmd power set-fixed-performance-mode-enabled true\nsetprop persist.sys.thermal.mitigation 0 2>/dev/null\nsetprop debug.thermal.throttle.disable 1 2>/dev/null")
+        return "❄️ Thermal Status Locked to 0°C (Zero CPU/GPU Throttling)"
+    }
+
     // =========================================================================
     // 7. LIVE ACTIVE OS STATUS CHECK
     // =========================================================================
@@ -493,16 +597,19 @@ object Actions {
         val touchResample = Shell.run("cmd device_config get input_native_boot resample_touch").trim()
         val wifiOut = Shell.run("cmd wifi status").trim()
         val audioStatus = AudioTest.getDiagnosticStatus()
+        val taskAffinity = Shell.run("taskset -p \$(pidof $g 2>/dev/null | awk '{print \$1}') 2>/dev/null").trim()
 
         return buildString {
             appendLine("📊 === LIVE ACTIVE OS STATUS ===")
             appendLine("• Refresh Rate: Min $minHz / Peak $peakHz (Target: 120.0)")
             appendLine("• Hardware Display Size: $wm")
-            appendLine("• GameMode 2 ($g): $gameOut")
-            appendLine("• 2560Hz Touch Resample: $touchResample (false = unbatched)")
-            appendLine("• Joyose Status: ${if (joyosePid.isBlank()) "Dead ✅ (No throttling)" else "Alive (PID $joyosePid)"}")
+            appendLine("• Game Mode 2 ($g): $gameOut")
+            appendLine("• 2560Hz Touch Resample: $touchResample (false = unbatched 0ms)")
+            appendLine("• Xiaomi Joyose: ${if (joyosePid.isBlank()) "Dead ✅ (Zero throttling)" else "Alive (PID $joyosePid)"}")
             appendLine("• Audio Engine: $audioStatus")
-            appendLine("• Wi-Fi Status: ${if (wifiOut.contains("low latency: enabled", true)) "Low-Latency Active ✅" else wifiOut.take(45)}")
+            appendLine("• Wi-Fi Status: ${if (wifiOut.contains("low latency: enabled", true)) "Low-Latency Locked ✅" else wifiOut.take(45)}")
+            if (taskAffinity.isNotBlank()) appendLine("• CPU Affinity: $taskAffinity (Target: fc / Big Cores)")
+            appendLine("• Tournament DND: ${if (isEsportsDndOn) "ACTIVE 🛡️" else "OFF"}")
         }
     }
 
@@ -520,24 +627,33 @@ object Actions {
             PID=${'$'}(pidof $g 2>/dev/null)
             if [ -n "${'$'}PID" ]; then
                 for p in ${'$'}PID; do
-                    taskset -p f0 "${'$'}p" 2>/dev/null
+                    taskset -p fc "${'$'}p" 2>/dev/null
                     renice -n -20 -p "${'$'}p" 2>/dev/null
+                    chrt -r -p 99 "${'$'}p" 2>/dev/null
+                    for t in /proc/"${'$'}p"/task/*; do
+                        tid="${'$'}{t##*/}"
+                        [ -n "${'$'}tid" ] && taskset -p fc "${'$'}tid" 2>/dev/null
+                        [ -n "${'$'}tid" ] && renice -n -20 -p "${'$'}tid" 2>/dev/null
+                    done
                 done
             fi
         """.trimIndent()
         Shell.run(script)
-        return "PID pinned to Prime Cores (f0)"
+        return "PID and RenderThreads pinned to Performance & Prime Cores (fc)"
     }
 
     fun watchdogTick(game: String) {
         val g = safeGame(game)
         val script = """
             service call SurfaceFlinger 1035 i32 -1
+            service call SurfaceFlinger 1008 i32 1
             settings put system min_refresh_rate 120.0
             settings put system peak_refresh_rate 120.0
             settings put secure user_refresh_rate 120
             settings put secure miui_refresh_rate 120
             settings put system is_smart_fps 0
+            settings put system thermal_refresh_rate_cap 120
+            settings put system display_max_refresh_rate 120
             cmd thermalservice override-status 0
             am force-stop com.xiaomi.joyose 2>/dev/null
         """.trimIndent()
@@ -579,6 +695,8 @@ object Actions {
             cmd device_config put activity_manager use_compaction false 2>/dev/null
             settings put global ram_expand_size 0 2>/dev/null
             settings put system miui_memory_extension 0 2>/dev/null
+            sync
+            echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
         """.trimIndent()
         Shell.run(script)
         return "⚡ 12GB Zero-Swap Locked"
@@ -586,12 +704,13 @@ object Actions {
 
     fun applyZeroLatencySurfaceFlingerScanout(): String {
         val script = """
-            cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null
+            cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 3 2>/dev/null
             service call SurfaceFlinger 1008 i32 1 2>/dev/null
             setprop debug.sf.latch_unsignaled 1
+            setprop debug.sf.disable_backpressure 1
         """.trimIndent()
         Shell.run(script)
-        return "SurfaceFlinger 2-Buffer Scanout Active"
+        return "SurfaceFlinger 3-Buffer Zero-Latency Scanout Active"
     }
 
     fun apply1000HzRawGyroscope(game: String): String {
@@ -617,6 +736,8 @@ object Actions {
             "0.50", "0.55" -> 1
             "0.60", "0.65" -> 2
             "0.70", "0.75" -> 3
+            "stretched", "18:9" -> 4
+            "ipad", "4:3" -> 5
             "1.0", "1.00", "disable" -> 0
             else -> 3
         }

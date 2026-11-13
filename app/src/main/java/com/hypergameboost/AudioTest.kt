@@ -43,7 +43,7 @@ object AudioTest {
 
     @Volatile var isVolumeBoostOn: Boolean = false
     @Volatile var volumeBoostPercent: Int = 50 // 0 to 100%
-    @Volatile var activePresetId: Int = 0 // 0=Off, 1=Realme Dolby Gaming, 2=Dolby Voice (Pure Tep-Tep), 3=3D Spatial Radar
+    @Volatile var activePresetId: Int = 0 // 0=Off, 1=Realme Dolby Gaming, 2=Dolby Voice, 3=3D Spatial Radar, 4=IEM Hyper-Clarity
 
     @Volatile
     var liveThreatLevel: Int = 0
@@ -137,7 +137,7 @@ object AudioTest {
         }
 
         // Shizuku hardware hooks to bypass offload & limiters on Android 16
-        Shell.runAsync("setprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
+        Shell.runAsync("setprop persist.vendor.audio.fluence.voicecall false\nsetprop persist.vendor.audio.fluence.voicerec false\nsetprop persist.vendor.audio.fluence.speaker false\nsetprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
 
         return applyCombinedDspSafe()
     }
@@ -149,8 +149,8 @@ object AudioTest {
     // 2. REALME DOLBY ATMOS & FOOTSTEP PRESETS (Independent Presets)
     @Synchronized
     fun applyDolbyFootstepPreset(presetId: Int): String {
-        activePresetId = presetId.coerceIn(0, 3)
-        Shell.runAsync("setprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
+        activePresetId = presetId.coerceIn(0, 4)
+        Shell.runAsync("setprop persist.vendor.audio.fluence.voicecall false\nsetprop persist.vendor.audio.fluence.voicerec false\nsetprop persist.vendor.audio.fluence.speaker false\nsetprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
         return applyCombinedDspSafe()
     }
 
@@ -211,6 +211,13 @@ object AudioTest {
                                     freqHz in 801..4500 -> 400
                                     else -> 450
                                 }
+                                4 -> when {
+                                    freqHz <= 120 -> -600
+                                    freqHz in 121..800 -> -200
+                                    freqHz in 801..3500 -> 480
+                                    freqHz in 3501..7000 -> 350
+                                    else -> 420
+                                }
                                 else -> 0
                             }
                             val clampedMb = targetMb.coerceIn(minLevel, maxLevel).toShort()
@@ -226,6 +233,7 @@ object AudioTest {
                                 1 -> 550.toShort()
                                 2 -> 350.toShort()
                                 3 -> 850.toShort()
+                                4 -> 400.toShort()
                                 else -> 0.toShort()
                             }
                             virt.setStrength(strength)
@@ -261,6 +269,7 @@ object AudioTest {
                 1 -> "Realme Dolby Gaming (Full Tep-Tep)"
                 2 -> "Dolby Voice/Scout (Pure Footsteps)"
                 3 -> "3D Spatial Surround Radar"
+                4 -> "IEM / Headphone Hyper-Clarity"
                 else -> "OFF (Stock EQ)"
             }
             val volStatus = if (isVolumeBoostOn) "+$volumeBoostPercent% Clean Boost" else "Stock Volume"

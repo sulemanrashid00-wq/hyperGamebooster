@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "13.0-CleanOneClick"
+        versionCode = 16
+        versionName = "13.1-EsportsPro"
     }
 
     buildTypes {

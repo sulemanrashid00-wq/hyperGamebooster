@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -16,8 +15,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -81,9 +78,10 @@ fun MainScreen() {
     var selectedGame by remember { mutableStateOf(Games.known.keys.first()) }
     var gamesList by remember { mutableStateOf(listOf("com.tencent.ig")) }
     var activeTab by remember { mutableStateOf(0) }
-    var statusLog by remember { mutableStateOf("⚡ System Ready (v13.0 Clean One-Click). Tap any feature to activate.") }
+    var statusLog by remember { mutableStateOf("⚡ System Ready (v13.1 Esports Pro). Tap any feature to activate.") }
     var cleanBoostPct by remember { mutableIntStateOf(AppPrefs.getCleanBoostPct(selectedGame)) }
     var activeDolby by remember { mutableIntStateOf(AppPrefs.getDolbyPreset(selectedGame)) }
+    var isDndActive by remember { mutableStateOf(Actions.isEsportsDndOn) }
     var crosshairActive by remember { mutableStateOf(CrosshairSettings.style > 0) }
 
     DisposableEffect(Unit) {
@@ -138,7 +136,7 @@ fun MainScreen() {
                 border = BorderStroke(1.dp, Color(0xFF00E5FF))
             ) {
                 Text(
-                    text = "v13.0 ONE-CLICK",
+                    text = "v13.1 ESPORTS PRO",
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     color = Color(0xFF00E5FF),
                     fontWeight = FontWeight.Bold,
@@ -225,8 +223,8 @@ fun MainScreen() {
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("🚀 1-CLICK ULTIMATE 120 FPS BOOST & LAUNCH", color = Color(0xFF00FF66), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("Unlocks 120Hz refresh rate, unblocks native 120 FPS, halts Joyose, sets 2560Hz touch & FastConnect Wi-Fi.", color = Color(0xFF90A4AE), fontSize = 10.5.sp)
+                            Text("🚀 1-CLICK ULTIMATE ESPORTS 120 FPS BOOST", color = Color(0xFF00FF66), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Unlocks 120Hz display lock, unblocks native 120 FPS, halts Joyose, sets 2560Hz touch, pins RenderThreads to Cores fc & enables FastConnect Wi-Fi.", color = Color(0xFF90A4AE), fontSize = 10.5.sp)
 
                             Button(
                                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -258,7 +256,7 @@ fun MainScreen() {
                         }
                     }
 
-                    // Card 2: GPU Driver & Compilation
+                    // Card 2: GPU Driver & HyperOS 3 Overdrive
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1A2A)),
@@ -266,7 +264,7 @@ fun MainScreen() {
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("⚡ GPU DRIVER & AOT COMPILATION", color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            Text("⚡ QUALCOMM ADRENO & HYPEROS 3 OVERDRIVE", color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Button(
                                     modifier = Modifier.weight(1f).height(40.dp),
@@ -287,6 +285,31 @@ fun MainScreen() {
                                     Text("⚡ System Driver", fontSize = 10.sp, color = Color(0xFF00E5FF))
                                 }
                             }
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Button(
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    onClick = {
+                                        isDndActive = !isDndActive
+                                        exec { Actions.setEsportsTournamentDnd(isDndActive) }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isDndActive) Color(0xFF2E7D32) else Color(0xFF142436)),
+                                    border = BorderStroke(1.dp, if (isDndActive) Color(0xFF00FF66) else Color(0xFF263238)),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(if (isDndActive) "🛡️ DND ON" else "🛡️ Focus DND", fontSize = 10.sp, color = Color.White)
+                                }
+                                Button(
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    onClick = { exec { Actions.applyThermalZeroOverride() } },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
+                                    border = BorderStroke(1.dp, Color(0xFF00E5FF)),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text("❄️ 0°C Thermal Lock", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                }
+                            }
+
                             Button(
                                 modifier = Modifier.fillMaxWidth().height(40.dp),
                                 onClick = { exec { Actions.applyAotSpeedCompile(selectedGame) } },
@@ -306,14 +329,14 @@ fun MainScreen() {
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("🔬 LIVE HARDWARE VERIFICATION", color = Color(0xFFB0BEC5), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("🔬 LIVE HARDWARE & OS VERIFICATION", color = Color(0xFFB0BEC5), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Button(
                                 modifier = Modifier.fillMaxWidth().height(42.dp),
                                 onClick = { exec { Actions.checkActiveOsStatus(selectedGame) } },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EA)),
                                 shape = RoundedCornerShape(6.dp)
                             ) {
-                                Text("🔍 CHECK ACTIVE OS STATUS (120Hz / wm size / Joyose)", color = Color.White, fontSize = 11.sp)
+                                Text("🔍 CHECK ACTIVE OS STATUS (120Hz / wm size / Joyose / Cores)", color = Color.White, fontSize = 11.sp)
                             }
                         }
                     }
@@ -338,22 +361,23 @@ fun MainScreen() {
                                 "🥔 1-Click Ultra-Potato 720p (Max Smoothness)" to 1,
                                 "🔥 1-Click Scrims 810p (High FPS + Clarity)" to 2,
                                 "⚡ 1-Click Esports 900p Pro (Exact 20:9 Ratio)" to 3,
-                                "📱 1-Click Stretched Hitbox 1080x2160 (Wider Targets)" to 4,
+                                "📱 1-Click Stretched Hitbox 18:9 (Wider Enemies)" to 4,
+                                "📟 1-Click iPad 4:3 Hitbox Ratio (Ultra-Wide Bodies)" to 5,
                                 "🔙 1-Click Reset Native 1.5K Display (1220x2712)" to 0
                             ).forEach { (label, preset) ->
                                 Button(
                                     modifier = Modifier.fillMaxWidth().height(42.dp),
                                     onClick = { exec { Actions.applyHardwareResolution(preset, selectedGame) } },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (preset == 0) Color(0xFF1E2836) else if (preset == 4) Color(0xFF00E5FF) else Color(0xFF142436)
+                                        containerColor = if (preset == 0) Color(0xFF1E2836) else if (preset == 4 || preset == 5) Color(0xFF00E5FF) else Color(0xFF142436)
                                     ),
-                                    border = BorderStroke(1.dp, if (preset == 4) Color(0xFF00E5FF) else Color(0xFF263238)),
+                                    border = BorderStroke(1.dp, if (preset == 4 || preset == 5) Color(0xFF00E5FF) else Color(0xFF263238)),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Text(
                                         text = label,
-                                        color = if (preset == 4) Color.Black else Color.White,
-                                        fontWeight = if (preset == 4 || preset == 1) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (preset == 4 || preset == 5) Color.Black else Color.White,
+                                        fontWeight = if (preset == 4 || preset == 5 || preset == 1) FontWeight.Bold else FontWeight.Normal,
                                         fontSize = 11.sp
                                     )
                                 }
@@ -378,7 +402,16 @@ fun MainScreen() {
                                     border = BorderStroke(1.dp, Color(0xFF00FF66)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("🌿 Vivid 1.5x", fontSize = 10.sp, color = Color(0xFF00FF66))
+                                    Text("🌿 Vivid", fontSize = 10.sp, color = Color(0xFF00FF66))
+                                }
+                                Button(
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    onClick = { exec { Actions.applyCamperFilter("contrast") } },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
+                                    border = BorderStroke(1.dp, Color(0xFFFFD600)),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text("🎯 Contrast", fontSize = 10.sp, color = Color(0xFFFFD600))
                                 }
                                 Button(
                                     modifier = Modifier.weight(1f).height(40.dp),
@@ -387,7 +420,7 @@ fun MainScreen() {
                                     border = BorderStroke(1.dp, Color(0xFFFF5252)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("👁️ Scout Invert", fontSize = 10.sp, color = Color(0xFFFF5252))
+                                    Text("👁️ Scout", fontSize = 10.sp, color = Color(0xFFFF5252))
                                 }
                                 Button(
                                     modifier = Modifier.weight(1f).height(40.dp),
@@ -395,7 +428,7 @@ fun MainScreen() {
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("Stock 1.0x", fontSize = 10.sp, color = Color.White)
+                                    Text("Stock", fontSize = 10.sp, color = Color.White)
                                 }
                             }
                             Button(
@@ -455,12 +488,13 @@ fun MainScreen() {
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("🎧 REALME DOLBY ATMOS & CLEAN VOLUME", color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("Subtractive bass-cut isolator elevates footsteps cleanly without digital clipping.", color = Color(0xFF90A4AE), fontSize = 10.5.sp)
+                            Text("Subtractive bass-cut isolator elevates footsteps cleanly without digital clipping. Voip mic ducking eliminated.", color = Color(0xFF90A4AE), fontSize = 10.5.sp)
 
                             listOf(
                                 1 to "🎯 Dolby Gaming (Full Tep-Tep + 3D)",
                                 2 to "🗣️ Voice / Scout (Pure Footsteps)",
                                 3 to "🌌 3D Spatial Surround Radar",
+                                4 to "⚡ IEM / Earphone Hyper-Clarity",
                                 0 to "🔇 Dolby EQ Off (Stock)"
                             ).forEach { (id, label) ->
                                 val isSelected = activeDolby == id
@@ -553,7 +587,7 @@ fun MainScreen() {
                                     border = BorderStroke(1.dp, Color(0xFF00E5FF)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("🌐 1.1.1.1 DNS", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                    Text("1.1.1.1", fontSize = 10.sp, color = Color(0xFF00E5FF))
                                 }
                                 Button(
                                     modifier = Modifier.weight(1f).height(40.dp),
@@ -562,7 +596,16 @@ fun MainScreen() {
                                     border = BorderStroke(1.dp, Color(0xFF00E5FF)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("🌐 8.8.8.8 DNS", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                    Text("8.8.8.8", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                }
+                                Button(
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    onClick = { exec { Actions.setGamingDns("adguard") } },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
+                                    border = BorderStroke(1.dp, Color(0xFF00E5FF)),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text("AdGuard", fontSize = 10.sp, color = Color(0xFF00E5FF))
                                 }
                                 Button(
                                     modifier = Modifier.weight(1f).height(40.dp),
@@ -570,7 +613,7 @@ fun MainScreen() {
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF142436)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
-                                    Text("Stock DNS", fontSize = 10.sp, color = Color.White)
+                                    Text("Stock", fontSize = 10.sp, color = Color.White)
                                 }
                             }
                         }
