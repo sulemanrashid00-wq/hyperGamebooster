@@ -136,8 +136,8 @@ object AudioTest {
             }
         }
 
-        // Shizuku hardware hooks to bypass offload & limiters
-        Shell.runAsync("setprop audio.offload.disable 1\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1")
+        // Shizuku hardware hooks to bypass offload & limiters on Android 16
+        Shell.runAsync("setprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
 
         return applyCombinedDspSafe()
     }
@@ -150,7 +150,7 @@ object AudioTest {
     @Synchronized
     fun applyDolbyFootstepPreset(presetId: Int): String {
         activePresetId = presetId.coerceIn(0, 3)
-        Shell.runAsync("setprop audio.offload.disable 1\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1")
+        Shell.runAsync("setprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
         return applyCombinedDspSafe()
     }
 

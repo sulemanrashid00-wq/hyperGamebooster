@@ -34,7 +34,7 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v12.0 God-Tier Watchdog")
+            .setContentTitle("HyperGameBooster v13.0 God-Tier Watchdog")
             .setContentText("Monitoring $game (FastConnect Wi-Fi & 120 FPS Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
@@ -131,22 +131,7 @@ class AutoService : Service() {
                     Actions.setGbTouchTapStability(gbTap)
                     Actions.applyRedMagicInstantActionSpeed(game)
 
-                    // Apply PGT Graphics & Downscaling
-                    Actions.applyPgtGraphicsConfig(
-                        game = game,
-                        resolution = res,
-                        quality = qual,
-                        fps = fps,
-                        potatoLevel = potato,
-                        simpleShader = simpleShader,
-                        shadowEnabled = shadow,
-                        msaaEnabled = msaa,
-                        soundQuality = sound,
-                        gpuExtension = gpuExt,
-                        bilinearFilter = bilinearFilter,
-                        readOnlyLock = true
-                    )
-
+                    // Apply Hardware Downscaling
                     Actions.applyDownscaleAndFps(game, ds, fps)
                     Actions.applyCamperFilters(satMode)
                     if (bypassCharge) {
