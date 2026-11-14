@@ -267,17 +267,17 @@ fun App() {
     var hardwareRefreshRate by remember { mutableStateOf(120.0) }
 
     // PGT+ v0.25.9 State
-    var pgtRes by remember { mutableStateOf("1280x720") }
-    var pgtQual by remember { mutableStateOf("Smooth") }
-    var pgtFps by remember { mutableStateOf(120) }
-    var pgtPotatoLevel by remember { mutableStateOf("Off") }
-    var pgtSimpleShader by remember { mutableStateOf(false) }
+    var pgtRes by remember { mutableStateOf("800x600") }
+    var pgtQual by remember { mutableStateOf("Super Smooth") }
+    var pgtFps by remember { mutableIntStateOf(120) }
+    var pgtPotatoLevel by remember { mutableStateOf("Ultra (LOD +3)") }
+    var pgtSimpleShader by remember { mutableStateOf(true) }
     var pgtShadow by remember { mutableStateOf(false) }
     var pgtMsaa by remember { mutableStateOf(false) }
     var pgtSoundQual by remember { mutableStateOf("Ultra") }
     var pgtGpuExt by remember { mutableStateOf("Apply All") }
     var pgtSaveSens by remember { mutableStateOf(true) }
-    var pgtBilinear by remember { mutableStateOf(false) }
+    var pgtBilinear by remember { mutableStateOf(true) }
 
     // Wide FOV & Magnifier
     var maintainYFov by remember { mutableStateOf(false) }
@@ -292,10 +292,10 @@ fun App() {
     var r1CoordY by remember { mutableStateOf("${CrosshairSettings.r1TargetY}") }
 
     // Clean Volume Booster & Realme Dolby Atmos Presets (Zero EQ Distortion)
-    var cleanBoostPercent by remember { mutableIntStateOf(sp.getInt("clean_boost_pct", 50)) }
-    var isCleanBoostActive by remember { mutableStateOf(sp.getBoolean("clean_boost_active", false)) }
-    var activeDolbyPreset by remember { mutableIntStateOf(sp.getInt("dolby_preset", 0)) }
-    var selectedTouchPreset by remember { mutableStateOf(1) }
+    var cleanBoostPercent by remember { mutableIntStateOf(sp.getInt("clean_boost_pct", 70)) }
+    var isCleanBoostActive by remember { mutableStateOf(sp.getBoolean("clean_boost_active", true)) }
+    var activeDolbyPreset by remember { mutableIntStateOf(sp.getInt("dolby_preset", 2)) }
+    var selectedTouchPreset by remember { mutableIntStateOf(1) }
 
     // Motion Control state
     var motionEnabled by remember { mutableStateOf(false) }
@@ -325,12 +325,12 @@ fun App() {
     var miniAppPkg by remember { mutableStateOf("com.whatsapp") }
 
     // v9.0 God-Tier State Variables
-    var downscaleFactor by remember { mutableStateOf("0.60") }
+    var downscaleFactor by remember { mutableStateOf("0.55") }
     var magneticAimActive by remember { mutableStateOf(true) }
     var stretchedHitboxActive by remember { mutableStateOf(false) }
     var gbAimAccuracy by remember { mutableFloatStateOf(100f) }
     var gbResponseSpeed by remember { mutableFloatStateOf(100f) }
-    var gbTapStability by remember { mutableFloatStateOf(0f) }
+    var gbTapStability by remember { mutableFloatStateOf(100f) }
     var selectedDriver by remember { mutableStateOf("system") }
     var networkMode by remember { mutableStateOf("pure_wifi") }
     var currentGfxPreset by remember { mutableIntStateOf(AppPrefs.getGfxPreset(selectedGame)) }
@@ -338,33 +338,33 @@ fun App() {
     fun loadProfileForGame(game: String) {
         currentGfxPreset = AppPrefs.getGfxPreset(game)
         pgtFps = sp.getInt("fps_$game", 120)
-        pgtRes = sp.getString("res_$game", "1280x720") ?: "1280x720"
-        pgtQual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
-        pgtPotatoLevel = sp.getString("potato_$game", "Off") ?: "Off"
-        pgtSimpleShader = sp.getBoolean("simple_shader_$game", false)
+        pgtRes = sp.getString("res_$game", "800x600") ?: "800x600"
+        pgtQual = sp.getString("qual_$game", "Super Smooth") ?: "Super Smooth"
+        pgtPotatoLevel = sp.getString("potato_$game", "Ultra (LOD +3)") ?: "Ultra (LOD +3)"
+        pgtSimpleShader = sp.getBoolean("simple_shader_$game", true)
         pgtShadow = sp.getBoolean("shadow_$game", false)
         pgtMsaa = sp.getBoolean("msaa_$game", false)
         pgtSoundQual = sp.getString("sound_$game", "Ultra") ?: "Ultra"
         pgtGpuExt = sp.getString("gpu_ext_$game", "Apply All") ?: "Apply All"
         pgtSaveSens = sp.getBoolean("save_sens_$game", true)
-        pgtBilinear = sp.getBoolean("bilinear_$game", false)
+        pgtBilinear = sp.getBoolean("bilinear_$game", true)
         zoomScale = sp.getFloat("zoom_$game", 2.5f)
         bulletRegActive = sp.getBoolean("bullet_reg_$game", true)
         rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
         maintainYFov = sp.getBoolean("wide_fov_$game", false)
-        downscaleFactor = sp.getString("ds_$game", "0.60") ?: "0.60"
+        downscaleFactor = sp.getString("ds_$game", "0.55") ?: "0.55"
         selectedTouchPreset = sp.getInt("touch_preset_$game", 1)
         magneticAimActive = sp.getBoolean("magnetic_aim_$game", true)
         stretchedHitboxActive = sp.getBoolean("stretched_hitbox_$game", false)
         hardwareRefreshRate = sp.getFloat("refresh_rate_$game", 120.0f).toDouble()
         gbAimAccuracy = sp.getFloat("gb_aim_$game", 100f)
         gbResponseSpeed = sp.getFloat("gb_resp_$game", 100f)
-        gbTapStability = sp.getFloat("gb_tap_$game", 0f)
+        gbTapStability = sp.getFloat("gb_tap_$game", 100f)
         selectedDriver = sp.getString("driver_$game", "system") ?: "system"
         networkMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
-        activeDolbyPreset = sp.getInt("dolby_preset_$game", sp.getInt("dolby_preset", 0))
-        cleanBoostPercent = sp.getInt("clean_boost_pct_$game", sp.getInt("clean_boost_pct", 50))
-        isCleanBoostActive = sp.getBoolean("clean_boost_active_$game", false)
+        activeDolbyPreset = sp.getInt("dolby_preset_$game", sp.getInt("dolby_preset", 2))
+        cleanBoostPercent = sp.getInt("clean_boost_pct_$game", sp.getInt("clean_boost_pct", 70))
+        isCleanBoostActive = sp.getBoolean("clean_boost_active_$game", true)
         CrosshairSettings.magnifierScale = zoomScale
     }
 
@@ -424,6 +424,11 @@ fun App() {
             installedGamesList.firstOrNull()?.let {
                 selectedGame = it
                 loadProfileForGame(it)
+            }
+            scope.launch {
+                statusLog = "⚡ Auto-applying v17.0 Master Profile (22 tweaks active)..."
+                val res = Actions.executeMasterProfile(ctx, selectedGame, apply810pDisplay = false, launchGame = false)
+                statusLog = "✅ $res"
             }
         }
     }
@@ -620,21 +625,21 @@ fun App() {
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
                                 onClick = {
                                     triggerVibe(ctx)
-                                    statusLog = "🔥 Force-stopping background game & applying all user settings..."
+                                    statusLog = "🔥 Force-stopping background game & applying 810p Master Profile + AutoService..."
                                     scope.launch {
-                                        val res = Actions.executeMasterAllInOneAndLaunch(ctx, selectedGame)
+                                        val res = Actions.executeMasterProfile(ctx, selectedGame, apply810pDisplay = true, launchGame = true)
                                         statusLog = res
-                                        Toast.makeText(ctx, "🔥 1-Click Master Boost Applied & Game Started!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, "🚀 810p Master Boost Applied & Game Launched!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00)),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text(
-                                    "🔥 1-CLICK MAX EVERYTHING + APPLY MY SETTINGS & START GAME",
+                                    "🚀 BOOST & LAUNCH GAME NOW",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = 13.sp
                                 )
                             }
 
@@ -644,10 +649,10 @@ fun App() {
                                     triggerVibe(ctx)
                                     statusLog = "🔙 Restoring phone to stock 1.5K display and default settings..."
                                     scope.launch {
-                                        val res = Actions.revertAll(selectedGame)
+                                        val res = Actions.restoreToStock(selectedGame)
                                         statusLog = res
                                         currentGfxPreset = 0
-                                        Toast.makeText(ctx, "Stock settings restored!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, "Stock settings restored & system packages reinstalled!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF90A4AE)),
@@ -848,46 +853,16 @@ fun App() {
 
                                     triggerVibe(ctx)
                                     btnLaunchText = "🚀 LAUNCHING..."
-
+                                    statusLog = "🚀 Executing v17.0 Master Profile & Launching Game..."
                                     val t0 = System.currentTimeMillis()
 
-                                    // 1. Immediately launch game via 3-Stage Fallback (<50ms instant response)
-                                    val launchRes = Actions.launchGame(ctx, selectedGame)
-
-                                    // 2. Fire the fast boost, persistent GFX lock & watchdog in the background concurrently
                                     scope.launch {
-                                        try {
-                                            Actions.applyUnrestrictedPowerPolicy(selectedGame)
-                                            Actions.clearPowerKeeperJoyoseWebViewData()
-                                            if (magneticAimActive) {
-                                                Actions.applyMagneticAimAndHitReg(selectedGame)
-                                            }
-                                            Actions.applyPgtGraphicsConfig(
-                                                game = selectedGame,
-                                                resolution = pgtRes,
-                                                quality = pgtQual,
-                                                fps = pgtFps,
-                                                potatoLevel = pgtPotatoLevel,
-                                                simpleShader = pgtSimpleShader,
-                                                shadowEnabled = pgtShadow,
-                                                msaaEnabled = pgtMsaa,
-                                                soundQuality = pgtSoundQual,
-                                                gpuExtension = pgtGpuExt,
-                                                saveSensitivity = pgtSaveSens,
-                                                bilinearFilter = pgtBilinear,
-                                                readOnlyLock = false
-                                            )
-                                            Actions.applyMonsterBoost(selectedGame, ctx.packageName)
-                                            try {
-                                                ctx.startForegroundService(Intent(ctx, AutoService::class.java).putExtra("game", selectedGame))
-                                            } catch (_: Throwable) {}
-                                        } catch (_: Throwable) {}
+                                        val launchRes = Actions.executeMasterProfile(ctx, selectedGame, apply810pDisplay = true, launchGame = true)
+                                        val elapsed = System.currentTimeMillis() - t0
+                                        btnLaunchText = "✅ LAUNCHED IN ${elapsed}ms!"
+                                        statusLog = "🚀 Launched in ${elapsed}ms | $launchRes"
+                                        Toast.makeText(ctx, "🚀 Launched in ${elapsed}ms | $launchRes", Toast.LENGTH_SHORT).show()
                                     }
-
-                                    val elapsed = System.currentTimeMillis() - t0
-                                    btnLaunchText = "✅ LAUNCHED IN ${elapsed}ms!"
-                                    statusLog = "🚀 Launched in ${elapsed}ms | $launchRes"
-                                    Toast.makeText(ctx, "🚀 Launched in ${elapsed}ms | $launchRes", Toast.LENGTH_SHORT).show()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D00)),
                                 shape = RoundedCornerShape(10.dp)
@@ -899,9 +874,9 @@ fun App() {
                                 modifier = Modifier.fillMaxWidth().height(46.dp),
                                 onClick = {
                                     triggerVibe(ctx)
-                                    statusLog = "🧹 Clearing PowerKeeper, Joyose & WebView data..."
+                                    statusLog = "🧹 Disarming Joyose & WebView throttlers..."
                                     scope.launch {
-                                        val res = Actions.clearPowerKeeperJoyoseWebViewData()
+                                        val res = Actions.disableOrClearSystemThrottlers()
                                         statusLog = "✅ $res"
                                         Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
                                     }
@@ -911,6 +886,24 @@ fun App() {
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text("🧹 CLEAR POWERKEEPER, JOYOSE & WEBVIEW DATA + FORCE-STOP", color = Color(0xFFFFD600), fontSize = 11.sp)
+                            }
+
+                            Button(
+                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    statusLog = "♻️ Restoring WebView, Joyose & PowerKeeper via install-existing..."
+                                    scope.launch {
+                                        val res = Actions.restoreSystemPackagesInstallExisting()
+                                        statusLog = "✅ $res"
+                                        Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2836)),
+                                border = BorderStroke(1.dp, Color(0xFF00E676)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("♻️ RESTORE / INSTALL-EXISTING WEBVIEW, JOYOSE & POWERKEEPER", color = Color(0xFF00E676), fontSize = 11.sp)
                             }
                         }
                     }
@@ -1185,7 +1178,7 @@ fun App() {
 
                         val gfxPresets = listOf(
                             Triple(1, "720p Potato", "720x1600 (280 DPI, scale 0.55)"),
-                            Triple(2, "810p Scrim", "810x1800 (310 DPI, scale 0.65)"),
+                            Triple(2, "810p Scrim", "810x1800 (310 DPI, 800x600 Ultra)"),
                             Triple(3, "900p Pro", "900x2000 (350 DPI, scale 0.75)"),
                             Triple(4, "Stretched Wide", "1080x2160 (360 DPI, scale 0.80)"),
                             Triple(5, "iPad 4:3 View", "1200x1600 (300 DPI, scale 0.85)"),

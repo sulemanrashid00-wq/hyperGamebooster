@@ -9,17 +9,19 @@ import android.content.SharedPreferences
 data class GfxConfig(
     val presetId: Int,
     val label: String,
-    val wmSize: String,       // e.g. "720x1600" or "reset"
-    val density: String,      // e.g. "280" or "reset"
+    val wmSize: String,       // e.g. "810x1800" or "reset"
+    val density: String,      // e.g. "310" or "reset"
     val downscale: String,    // e.g. "0.55" or "disable"
     val fps: Int = 120,
     val lodBias: Int = 3
 )
 
 /**
- * AppPrefs - Unified Persistent State Engine (v16.0 Unified Master Execution Edition)
- * Ensures every single choice across Tabs 1, 2, 3, and 4 is automatically persisted
- * and executed seamlessly during individual taps and 1-Click Master Launch.
+ * AppPrefs - Unified Persistent State Engine (v17.0 Auto-Locked Custom Profile)
+ * Pre-configured with the exact 22-point master profile:
+ * 810p Scrims (810x1800 @ 310 DPI, 0.55 downscale, 120 FPS, LOD +3)
+ * Dolby Voice/Scout (Preset 2), 70% Clean Volume, 480Hz Jiggle God, 100/100/100 Touch IC,
+ * SkiaGL + System Driver, FastConnect Wi-Fi, Bypass Charging & Type-C Splitter Guard.
  */
 object AppPrefs {
     @Volatile
@@ -44,24 +46,24 @@ object AppPrefs {
 
     // 2. GFX Presets & Framebuffer Config
     // 0 = Native 1.5K (reset, reset, disable)
-    // 1 = 720p Ultra-Potato (720x1600, 280 DPI, scale 0.55) [DEFAULT]
-    // 2 = 810p Scrims (810x1800, 310 DPI, scale 0.65)
+    // 1 = 720p Ultra-Potato (720x1600, 280 DPI, scale 0.55)
+    // 2 = 810p Scrims (810x1800, 310 DPI, scale 0.55) [v17.0 DEFAULT]
     // 3 = 900p Pro (900x2000, 350 DPI, scale 0.75)
     // 4 = Stretched Wide Hitbox (1080x2160, 360 DPI, scale 0.80)
     // 5 = iPad 4:3 View (1200x1600, 300 DPI, scale 0.85)
     // 6 = Custom PGT+ (custom wm size & scale)
     fun getGfxPreset(game: String): Int =
-        getSp()?.getInt("gfx_preset_$game", 1) ?: 1
+        getSp()?.getInt("gfx_preset_$game", 2) ?: 2
 
     fun setGfxPreset(game: String, preset: Int) {
         getSp()?.edit()?.putInt("gfx_preset_$game", preset)?.apply()
     }
 
     fun getCustomWmSize(game: String): String =
-        getSp()?.getString("custom_wm_size_$game", "720x1600") ?: "720x1600"
+        getSp()?.getString("custom_wm_size_$game", "810x1800") ?: "810x1800"
 
     fun getCustomWmDensity(game: String): String =
-        getSp()?.getString("custom_wm_density_$game", "280") ?: "280"
+        getSp()?.getString("custom_wm_density_$game", "310") ?: "310"
 
     fun getCustomDownscale(game: String): String =
         getSp()?.getString("custom_scale_$game", "0.55") ?: "0.55"
@@ -82,7 +84,7 @@ object AppPrefs {
         return when (preset) {
             0 -> GfxConfig(0, "Native 1.5K (Stock)", "reset", "reset", "disable", fps, 0)
             1 -> GfxConfig(1, "720p Ultra-Potato", "720x1600", "280", "0.55", fps, lod)
-            2 -> GfxConfig(2, "810p Scrims", "810x1800", "310", "0.65", fps, lod)
+            2 -> GfxConfig(2, "810p Scrims (800x600 Ultra)", "810x1800", "310", "0.55", fps, lod)
             3 -> GfxConfig(3, "900p Pro", "900x2000", "350", "0.75", fps, lod)
             4 -> GfxConfig(4, "Stretched Wide Hitbox", "1080x2160", "360", "0.80", fps, lod)
             5 -> GfxConfig(5, "iPad 4:3 View", "1200x1600", "300", "0.85", fps, lod)
@@ -92,11 +94,11 @@ object AppPrefs {
                 val scale = getCustomDownscale(game)
                 GfxConfig(6, "Custom PGT+ ($size @ ${density}DPI, $scale)", size, density, scale, fps, lod)
             }
-            else -> GfxConfig(1, "720p Ultra-Potato", "720x1600", "280", "0.55", fps, lod)
+            else -> GfxConfig(2, "810p Scrims (800x600 Ultra)", "810x1800", "310", "0.55", fps, lod)
         }
     }
 
-    // 3. Target FPS
+    // 3. Target FPS (default 120)
     fun getTargetFps(game: String): Int =
         getSp()?.getInt("fps_$game", 120) ?: 120
 
@@ -126,23 +128,23 @@ object AppPrefs {
         else -> 1.0f
     }
 
-    // 6. Driver Mode: 0 = Game Driver, 1 = System Driver
+    // 6. Driver Mode: 0 = Game Driver, 1 = System Driver (default 1 = System Driver for best hit-reg)
     fun getDriverMode(game: String): Int =
-        getSp()?.getInt("driver_mode_$game", 0) ?: 0
+        getSp()?.getInt("driver_mode_$game", 1) ?: 1
 
     fun setDriverMode(game: String, mode: Int) {
         getSp()?.edit()?.putInt("driver_mode_$game", mode)?.apply()
     }
 
-    // 7. Dolby Footstep Preset (1 = Full Tep-Tep, 2 = Voice/Scout, 3 = 3D Spatial, 4 = IEM Hyper-Clarity, 0 = Off)
+    // 7. Dolby Footstep Preset: 1 = Full Tep-Tep, 2 = Voice/Scout (default 2), 3 = 3D Spatial, 4 = IEM, 0 = Off
     fun getDolbyPreset(game: String): Int =
-        getSp()?.getInt("dolby_preset_$game", 1) ?: 1
+        getSp()?.getInt("dolby_preset_$game", 2) ?: 2
 
     fun setDolbyPreset(game: String, preset: Int) {
         getSp()?.edit()?.putInt("dolby_preset_$game", preset)?.apply()
     }
 
-    // 8. Pure Clean Volume Percent (0 to 100, default 70)
+    // 8. Pure Clean Volume Percent (default 70%)
     fun getCleanVolumePercent(game: String): Int =
         getSp()?.getInt("clean_boost_pct_$game", 70) ?: 70
 

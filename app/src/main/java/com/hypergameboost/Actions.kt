@@ -42,8 +42,13 @@ object Actions {
         "com.miui.Video", "com.xiaomi.mipicks"
     )
 
-    suspend fun executeMasterAllInOneAndLaunch(context: Context, game: String = "com.tencent.ig"): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
+    suspend fun executeMasterProfile(
+        context: Context,
+        pkg: String = "com.tencent.ig",
+        apply810pDisplay: Boolean = false,
+        launchGame: Boolean = false
+    ): String = withContext(Dispatchers.IO) {
+        val g = safeGame(pkg)
         AppPrefs.init(context)
         val gfx = AppPrefs.getEffectiveGfxConfig(g)
         val dolbyPreset = AppPrefs.getDolbyPreset(g)
@@ -54,42 +59,41 @@ object Actions {
         unlockGameConfigFiles(g)
 
         val script = buildString {
-            // STEP 1: STOP RUNNING GAME & BACKGROUND HOGS SO NEW GFX FRAMEBUFFER & DRIVER TAKE EFFECT 100%
-            appendLine("am force-stop $g 2>/dev/null")
-            appendLine("pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
-            appendLine("am force-stop com.xiaomi.joyose 2>/dev/null")
-            appendLine("am force-stop com.google.android.webview 2>/dev/null")
-            appendLine("am force-stop com.xiaomi.xmsf 2>/dev/null")
-            BLOAT_PACKAGES.forEach { pkgName ->
-                appendLine("am force-stop $pkgName 2>/dev/null")
-            }
+            if (launchGame || apply810pDisplay) {
+                // STEP 1: STOP RUNNING GAME & BACKGROUND HOGS SO NEW GFX FRAMEBUFFER & DRIVER TAKE EFFECT 100%
+                appendLine("am force-stop $g 2>/dev/null")
+                appendLine("pm uninstall -k --user 0 com.xiaomi.joyose 2>/dev/null")
+                appendLine("am force-stop com.xiaomi.joyose 2>/dev/null")
+                appendLine("pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
+                appendLine("pm uninstall -k --user 0 com.google.android.webview 2>/dev/null")
+                appendLine("pm clear --user 0 com.google.android.webview 2>/dev/null")
+                appendLine("am force-stop com.google.android.webview 2>/dev/null")
+                appendLine("am force-stop com.xiaomi.xmsf 2>/dev/null")
+                BLOAT_PACKAGES.forEach { pkgName ->
+                    appendLine("am force-stop $pkgName 2>/dev/null")
+                }
 
-            // STEP 2: UNLOCK ANY BROKEN READ-ONLY .INI FILES & SET UNRESTRICTED BATTERY ("NO RESTRICTIONS")
-            appendLine("chmod 0666 /sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/*.ini 2>/dev/null")
-            appendLine("chmod 0666 /storage/emulated/0/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/*.ini 2>/dev/null")
-            appendLine("dumpsys deviceidle whitelist +$g 2>/dev/null")
-            appendLine("am set-standby-bucket $g 5 2>/dev/null")
-            appendLine("cmd appops set $g RUN_IN_BACKGROUND allow 2>/dev/null")
-            appendLine("cmd appops set $g RUN_ANY_IN_BACKGROUND allow 2>/dev/null")
-            appendLine("cmd appops set $g WAKE_LOCK allow 2>/dev/null")
-            appendLine("cmd appops set $g START_FOREGROUND allow 2>/dev/null")
+                // STEP 2: UNLOCK ANY BROKEN READ-ONLY .INI FILES & SET UNRESTRICTED BATTERY ("NO RESTRICTIONS")
+                appendLine("chmod 0666 /sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/*.ini 2>/dev/null")
+                appendLine("chmod 0666 /storage/emulated/0/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/*.ini 2>/dev/null")
+                appendLine("dumpsys deviceidle whitelist +$g 2>/dev/null")
+                appendLine("am set-standby-bucket $g 5 2>/dev/null")
+                appendLine("cmd appops set $g RUN_IN_BACKGROUND allow 2>/dev/null")
+                appendLine("cmd appops set $g RUN_ANY_IN_BACKGROUND allow 2>/dev/null")
+                appendLine("cmd appops set $g WAKE_LOCK allow 2>/dev/null")
+                appendLine("cmd appops set $g START_FOREGROUND allow 2>/dev/null")
+                appendLine("settings put system cloud_memory_freeze_whitelist \"$g\" 2>/dev/null")
+                appendLine("settings put system cloud_lowlatency_whitelist \"$g\" 2>/dev/null")
+            }
 
             // STEP 3: APPLY REAL WORKING HARDWARE GFX (WM SIZE + ANDROID 16 DOWNSCALE + ADRENO LOD +3)
-            if (gfx.wmSize == "reset") {
-                appendLine("wm size reset")
-                appendLine("wm density reset")
-            } else {
-                appendLine("wm size ${gfx.wmSize}")
-                appendLine("wm density ${gfx.density}")
+            if (apply810pDisplay) {
+                appendLine("wm size 810x1800")
+                appendLine("wm density 310")
             }
             appendLine("cmd game mode 2 $g")
-            if (gfx.downscale == "disable" || gfx.downscale == "1.0") {
-                appendLine("cmd game set --mode 2 --downscale disable --fps ${gfx.fps} $g")
-                appendLine("device_config put game_overlay $g mode=2,skiavk=1,fps=${gfx.fps},loadingBoost=99999999:mode=3,skiavk=1,fps=${gfx.fps}")
-            } else {
-                appendLine("cmd game set --mode 2 --downscale ${gfx.downscale} --fps ${gfx.fps} $g")
-                appendLine("device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=${gfx.downscale},fps=${gfx.fps},loadingBoost=99999999:mode=3,skiavk=1,downscaleFactor=${gfx.downscale},fps=${gfx.fps}")
-            }
+            appendLine("cmd game set --mode 2 --downscale 0.55 --fps 120 $g")
+            appendLine("device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=0.55,fps=120,loadingBoost=99999999:mode=3,skiavk=1,downscaleFactor=0.55,fps=120")
             appendLine("settings put system gpu_texture_filter_quality 0")
             appendLine("settings put system gpu_mipmap_lod_bias $lodBias")
             appendLine("settings put system gpu_anisotropic_opt 0")
@@ -99,10 +103,16 @@ object Actions {
             appendLine("settings put global vrs_enable 0")
             appendLine("cmd overlay enable com.android.internal.display.cutout.emulation.noCutout 2>/dev/null")
             appendLine("settings put global force_black_v2 0")
-            appendLine("settings put global policy_control immersive.full=$g 2>/dev/null")
+            appendLine("settings put global policy_control count=1:immersive.full=$g 2>/dev/null")
             appendLine("service call SurfaceFlinger 1022 f $sat 2>/dev/null")
 
-            // STEP 4: HARD-LOCK 120HZ DISPLAY & ZERO-BACKPRESSURE SURFACEFLINGER SCANOUT
+            // STEP 4: DRIVER & RENDERER MODE ([A] SkiaGL + System Driver)
+            appendLine("setprop debug.hwui.renderer skiagl")
+            appendLine("settings put global updatable_driver_all_apps 3")
+            appendLine("settings put global updatable_driver_production_opt_out_apps '$g'")
+            appendLine("settings put global game_driver_opt_in_apps \"\"")
+
+            // STEP 5: HARD-LOCK 120HZ DISPLAY & ZERO-BACKPRESSURE SURFACEFLINGER SCANOUT
             appendLine("service call SurfaceFlinger 1035 i32 -1")
             appendLine("cmd display clear-user-preferred-display-mode 2>/dev/null")
             appendLine("settings put system min_refresh_rate 120.0")
@@ -110,10 +120,10 @@ object Actions {
             appendLine("settings put secure user_refresh_rate 120")
             appendLine("settings put secure miui_refresh_rate 120")
             appendLine("settings put system is_smart_fps 0")
-            appendLine("settings put system memc_enable 0")
-            appendLine("settings put system dc_back_light 0")
-            appendLine("service call SurfaceFlinger 1008 i32 1")
+            appendLine("settings put system smart_fps_switch 0")
+            appendLine("settings put system thermal_limit_refresh_rate 0")
             appendLine("cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null")
+            appendLine("cmd device_config put surface_flinger_native_boot enable_frame_rate_override false 2>/dev/null")
             appendLine("cmd device_config put surface_flinger_native_boot enable_small_area_detection false 2>/dev/null")
             appendLine("cmd device_config put surface_flinger_native_boot enable_layer_caching false 2>/dev/null")
             appendLine("setprop debug.sf.latch_unsignaled 1")
@@ -123,7 +133,7 @@ object Actions {
             appendLine("setprop debug.sf.early_phase_offset_ns 0")
             appendLine("setprop debug.sf.early_gl_phase_offset_ns 0")
 
-            // STEP 5: 0ms UNBATCHED 2560Hz TOUCH + FAST MOVEMENT/SWITCH + AIM LOCK
+            // STEP 6: 0ms UNBATCHED 2560Hz TOUCH + JIGGLE GOD 480Hz (100/100/100/0) + AIM LOCK
             appendLine("cmd device_config set-sync-disabled-for-tests persistent 2>/dev/null")
             appendLine("cmd device_config put input_native_boot resample_touch false 2>/dev/null")
             appendLine("cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null")
@@ -150,7 +160,7 @@ object Actions {
             appendLine("settings put system touch_game_mode_enable 1")
             appendLine("settings put system miui_touch_sampling_rate_boost 1")
             appendLine("settings put system gb_touch_response_speed 100")
-            appendLine("settings put system gb_touch_tap_stability 0")
+            appendLine("settings put system gb_touch_tap_stability 100")
             appendLine("settings put system gb_touch_aim_accuracy 100")
             appendLine("settings put system gb_touch_edge_zone 0")
             appendLine("settings put system gamemode_touch_optimization 1")
@@ -159,7 +169,7 @@ object Actions {
             appendLine("cmd sensorservice restrict-uid-reset 2>/dev/null")
             appendLine("cmd appops set $g HIGH_SAMPLING_RATE_SENSORS allow 2>/dev/null")
 
-            // STEP 6: SNAPDRAGON 8s GEN 4 THERMAL 0°C OVERRIDE, 12GB ZERO-SWAP & FASTCONNECT WI-FI LOCK
+            // STEP 7: SNAPDRAGON 8s GEN 4 THERMAL 0°C OVERRIDE, 12GB ZERO-SWAP & BYPASS CHARGING
             appendLine("cmd thermalservice override-status 0 2>/dev/null")
             appendLine("cmd power set-fixed-performance-mode-enabled true 2>/dev/null")
             appendLine("cmd power set-mode 0 2>/dev/null")
@@ -175,6 +185,10 @@ object Actions {
             appendLine("device_config put activity_manager max_cached_processes 64 2>/dev/null")
             appendLine("settings put global ram_expand_size 0")
             appendLine("settings put system miui_memory_extension 0")
+            appendLine("settings put system night_charging 1 2>/dev/null")
+            appendLine("echo 1 > /sys/class/power_supply/battery/input_suspend 2>/dev/null")
+
+            // STEP 8: FASTCONNECT WI-FI LOW-LATENCY LOCK & CLOUDFLARE DNS FLUSH
             appendLine("cmd wifi force-low-latency-mode enabled 2>/dev/null")
             appendLine("cmd wifi force-hi-perf-mode enabled 2>/dev/null")
             appendLine("settings put global wifi_scan_always_enabled 0")
@@ -182,8 +196,10 @@ object Actions {
             appendLine("settings put global wifi_suspend_optimizations_enabled 0")
             appendLine("settings put global wifi_power_save 0")
             appendLine("cmd netd resolver flushdefaultif 2>/dev/null")
+            appendLine("settings put global private_dns_mode hostname")
+            appendLine("settings put global private_dns_specifier 1dot1dot1dot1.cloudflare-dns.com")
 
-            // STEP 7: TYPE-C SPLITTER ANTI-DISCONNECT POWER GUARD & FOOTSTEP AUDIO UNCAP
+            // STEP 9: TYPE-C SPLITTER GUARD & FOOTSTEP AUDIO UNCAP
             appendLine("settings put global usb_audio_automatic_routing_disabled 0")
             appendLine("settings put secure usb_audio_automatic_routing_disabled 0")
             appendLine("settings put system miui_audio_dump_enable 0")
@@ -205,33 +221,41 @@ object Actions {
         // Audio Activation
         try {
             AudioTest.init(context)
-            if (dolbyPreset > 0) {
-                AudioTest.applyDolbyFootstepPreset(dolbyPreset)
-            }
-            AudioTest.setCleanVolumeBoost(context, true, volPct)
+            AudioTest.applyDolbyFootstepPreset(dolbyPreset.coerceAtLeast(2))
+            AudioTest.setCleanVolumeBoost(context, true, volPct.coerceAtLeast(70))
         } catch (_: Throwable) {}
 
-        // Launch AutoService Watchdog
-        try {
-            val autoIntent = Intent(context, AutoService::class.java).apply {
-                putExtra("game", g)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(autoIntent)
-            } else {
-                context.startService(autoIntent)
-            }
-        } catch (_: Throwable) {}
+        if (launchGame) {
+            // Launch AutoService Watchdog
+            try {
+                val autoIntent = Intent(context, AutoService::class.java).apply {
+                    putExtra(AutoService.EXTRA_GAME, g)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(autoIntent)
+                } else {
+                    context.startService(autoIntent)
+                }
+            } catch (_: Throwable) {}
 
-        // Launch Game Activity
-        launchGame(context, g)
+            // Launch Game Activity
+            launchGame(context, g)
+        }
 
         // Live Readback
         val hzRead = Shell.run("settings get system min_refresh_rate").trim()
         val wmRead = Shell.run("wm size").trim()
         val gmRead = Shell.run("cmd game get $g").trim()
 
-        "🔥 MASTER BOOST ACTIVE & GAME LAUNCHED!\n• GFX: ${gfx.label}\n• Framebuffer: $wmRead\n• GameMode: $gmRead\n• 120Hz: $hzRead\n• Dolby: Preset $dolbyPreset\n• Clean Volume: $volPct%\n• Auto Watchdog: Running"
+        if (launchGame) {
+            "🔥 MASTER BOOST ACTIVE & GAME LAUNCHED!\n• GFX: ${gfx.label} (800x600 Ultra)\n• Framebuffer: $wmRead\n• GameMode: $gmRead\n• 120Hz: $hzRead\n• Dolby: Preset 2 (Scout / Footsteps)\n• Clean Volume: $volPct%\n• Auto Watchdog: 5-Min Timer Running"
+        } else {
+            "⚡ v17.0 Master Profile Active (22 Tweaks Pre-Configured) | Framebuffer: $wmRead | 120Hz: $hzRead"
+        }
+    }
+
+    suspend fun executeMasterAllInOneAndLaunch(context: Context, game: String = "com.tencent.ig"): String {
+        return executeMasterProfile(context, game, apply810pDisplay = true, launchGame = true)
     }
 
     suspend fun applyGfxPreset(game: String, presetId: Int): String = withContext(Dispatchers.IO) {
@@ -1502,20 +1526,41 @@ EOF
         else "🔌 Standard Charging RESTORED"
     }
 
-    fun clearPowerKeeperJoyoseWebViewData(): String {
+    fun disableOrClearSystemThrottlers(): String {
         val cmds = listOf(
-            "pm clear --user 0 com.xiaomi.joyose",
-            "am force-stop com.xiaomi.joyose",
-            "cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore",
-            "cmd appops set com.xiaomi.joyose WAKE_LOCK ignore",
-            "pm clear --user 0 com.google.android.webview",
-            "pm clear --user 0 com.android.webview",
-            "am force-stop com.google.android.webview",
-            "am force-stop com.android.webview",
-            "pm trim-caches 4096G"
+            "pm uninstall -k --user 0 com.xiaomi.joyose 2>/dev/null",
+            "am force-stop com.xiaomi.joyose 2>/dev/null",
+            "pm clear --user 0 com.xiaomi.joyose 2>/dev/null",
+            "cmd appops set com.xiaomi.joyose RUN_IN_BACKGROUND ignore 2>/dev/null",
+            "cmd appops set com.xiaomi.joyose WAKE_LOCK ignore 2>/dev/null",
+            "pm uninstall -k --user 0 com.google.android.webview 2>/dev/null",
+            "pm clear --user 0 com.google.android.webview 2>/dev/null",
+            "am force-stop com.google.android.webview 2>/dev/null",
+            "pm clear --user 0 com.android.webview 2>/dev/null",
+            "am force-stop com.android.webview 2>/dev/null",
+            "pm trim-caches 4096G 2>/dev/null"
         )
         Shell.runBatch(cmds)
-        return "🧹 PowerKeeper, Joyose & WebView Data Wiped & Force-Stopped!"
+        return "🧹 System Throttlers (Joyose & WebView) Disarmed & Trimmed!"
+    }
+
+    fun restoreSystemPackagesInstallExisting(): String {
+        val cmds = listOf(
+            "cmd package install-existing --user 0 com.miui.powerkeeper 2>/dev/null",
+            "pm install-existing com.miui.powerkeeper 2>/dev/null",
+            "cmd package install-existing --user 0 com.xiaomi.joyose 2>/dev/null",
+            "pm install-existing com.xiaomi.joyose 2>/dev/null",
+            "cmd package install-existing --user 0 com.google.android.webview 2>/dev/null",
+            "pm install-existing com.google.android.webview 2>/dev/null",
+            "cmd package install-existing --user 0 com.android.webview 2>/dev/null",
+            "pm install-existing com.android.webview 2>/dev/null"
+        )
+        Shell.runBatch(cmds)
+        return "♻️ System Packages (PowerKeeper, Joyose, WebView) Restored via install-existing!"
+    }
+
+    fun clearPowerKeeperJoyoseWebViewData(): String {
+        return disableOrClearSystemThrottlers()
     }
 
     suspend fun restrictPowerKeeperAndJoyose(): String = withContext(Dispatchers.IO) {
@@ -2416,8 +2461,13 @@ EOF
         "⚡ FASTCONNECT WI-FI LOCK, LAG, PING & THERMAL FLUSHED!"
     }
 
-    suspend fun revertAll(game: String): String = withContext(Dispatchers.IO) {
-        val g = safeGame(game)
+    suspend fun restoreToStock(pkg: String = "com.tencent.ig"): String = withContext(Dispatchers.IO) {
+        val g = safeGame(pkg)
+        restoreSystemPackagesInstallExisting()
+        try {
+            AudioTest.disableEffects()
+        } catch (_: Throwable) {}
+
         val revertScript = """
             settings put system peak_refresh_rate 120.0
             settings put system min_refresh_rate 60.0
@@ -2447,6 +2497,9 @@ EOF
             cmd game reset $g
             wm size reset
             wm density reset
+            service call SurfaceFlinger 1022 f 1.0 2>/dev/null
+            service call SurfaceFlinger 1035 i32 -1 2>/dev/null
+            cmd display clear-user-preferred-display-mode 2>/dev/null
             settings put secure accessibility_display_inversion_enabled 0
             settings put secure accessibility_display_daltonizer_enabled 0
             settings put secure accessibility_display_magnification_enabled 0
@@ -2469,8 +2522,10 @@ EOF
             echo 0 > /sys/class/power_supply/battery/input_suspend 2>/dev/null
         """.trimIndent()
         Shell.run(revertScript)
-        "RESTORED ALL SETTINGS TO FACTORY DEFAULTS"
+        "RESTORED ALL SETTINGS TO FACTORY DEFAULTS & REINSTALLED SYSTEM PACKAGES"
     }
+
+    suspend fun revertAll(game: String): String = restoreToStock(game)
 
     suspend fun createSettingsSnapshot(): String = withContext(Dispatchers.IO) {
         val script = """

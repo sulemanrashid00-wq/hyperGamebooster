@@ -34,8 +34,8 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v16.0 Master Watchdog")
-            .setContentText("Monitoring $game (FastConnect Wi-Fi & 120 FPS Active)")
+            .setContentTitle("HyperGameBooster v17.0 Master Watchdog")
+            .setContentText("Monitoring $game (120FPS + 810p + Dolby Scout Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -50,138 +50,81 @@ class AutoService : Service() {
         job = CoroutineScope(Dispatchers.IO).launch {
             AppPrefs.init(this@AutoService)
             AudioTest.init(this@AutoService)
-            Actions.clearPowerKeeperJoyoseWebViewData()
-            Actions.restrictPowerKeeperAndJoyose()
+            Actions.disableOrClearSystemThrottlers()
             runSmartWatchdog(game)
         }
         return START_NOT_STICKY
     }
 
+    private fun updateNotification(title: String, text: String) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val n = Notification.Builder(this, CHANNEL)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(true)
+            .build()
+        nm.notify(1, n)
+    }
+
     private suspend fun runSmartWatchdog(game: String) {
-        var wasGameRunning = false
-        var watchdogTimer = 0L
+        var gameHasRun = false
+        var shutdownStartTimeMs = 0L
 
         while (currentCoroutineContext().isActive) {
             val pidOut = Sh.run("pidof $game").trim()
             val isGameRunning = pidOut.isNotEmpty() && pidOut.split(Regex("\\s+")).any { it.all(Char::isDigit) }
 
             if (isGameRunning) {
-                if (!wasGameRunning) {
-                    wasGameRunning = true
+                shutdownStartTimeMs = 0L
+                if (!gameHasRun) {
+                    gameHasRun = true
 
-                    // 1. Force Unrestricted Battery & Safe UI/Joyose/WebView Data Cleanse
+                    // 1. Force Unrestricted Battery & Safe Throttler Disarm
                     Actions.applyUnrestrictedPowerPolicy(game)
-                    Actions.clearPowerKeeperJoyoseWebViewData()
+                    Actions.disableOrClearSystemThrottlers()
                     Actions.esportsMode(game, packageName)
                     NativeTools.startAdpfSession(this@AutoService, 8333333L)
                     NativeTools.setWifiLowLatency(this@AutoService, true)
 
-                    // 2. Read Per-Game SharedPreferences & apply customized profile + Persistent GFX
-                    val sp = getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE)
-                    val ds = sp.getString("ds_$game", "0.60") ?: "0.60"
-                    val fps = sp.getInt("fps_$game", 120)
-                    val res = sp.getString("res_$game", "1280x720") ?: "1280x720"
-                    val qual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
-                    val potato = sp.getString("potato_$game", "Off") ?: "Off"
-                    val simpleShader = sp.getBoolean("simple_shader_$game", false)
-                    val shadow = sp.getBoolean("shadow_$game", false)
-                    val msaa = sp.getBoolean("msaa_$game", false)
-                    val sound = sp.getString("sound_$game", "Ultra") ?: "Ultra"
-                    val gpuExt = sp.getString("gpu_ext_$game", "Apply All") ?: "Apply All"
-                    val satMode = sp.getString("sat_$game", "eagle_eye") ?: "eagle_eye"
-                    val bypassCharge = sp.getBoolean("bypass_$game", false)
-                    val bulletReg = sp.getBoolean("bullet_reg_$game", true)
-                    val rendererMode = sp.getString("renderer_$game", "skiagl") ?: "skiagl"
-                    val wideFov = sp.getBoolean("wide_fov_$game", false)
-                    val touchPreset = sp.getInt("touch_preset_$game", 1)
-                    val magneticAim = sp.getBoolean("magnetic_aim_$game", true)
-                    val stretchedHitbox = sp.getBoolean("stretched_hitbox_$game", false)
-                    val refreshRate = sp.getFloat("refresh_rate_$game", 120.0f).toDouble()
-                    val bilinearFilter = sp.getBoolean("bilinear_$game", false)
-                    val gbAim = sp.getFloat("gb_aim_$game", 100f).toInt()
-                    val gbResp = sp.getFloat("gb_resp_$game", 100f).toInt()
-                    val gbTap = sp.getFloat("gb_tap_$game", 0f).toInt()
-                    val driverMode = sp.getString("driver_$game", "system") ?: "system"
-                    val netMode = sp.getString("net_mode_$game", "pure_wifi") ?: "pure_wifi"
-                    val audioOverdrive = sp.getBoolean("audio_overdrive_$game", true)
-                    val audioVol = sp.getInt("audio_vol_$game", 165)
-                    val audioStep = sp.getInt("audio_step_$game", 6)
-
-                    // Apply hardware refresh rate, zero-swap & FastConnect
-                    Actions.setHardwareRefreshRate(refreshRate)
-                    Actions.apply12GbZeroSwapLock()
-                    Actions.applyZeroLatencySurfaceFlingerScanout()
-                    Actions.apply1000HzRawGyroscope(game)
-                    Actions.setGraphicsDriverType(game, driverMode)
-
-                    if (netMode == "pure_wifi") {
-                        Actions.setNetworkModePureWifiLock()
-                    } else {
-                        Actions.setNetworkModeHyperFusion(game)
-                    }
-
-                    if (magneticAim) {
-                        Actions.applyMagneticAimAndHitReg(game)
-                    } else if (bulletReg) {
-                        Actions.applyBulletRegistrationMode(game, true, rendererMode)
-                    }
-                    Actions.applyTouchPreset(touchPreset)
-                    Actions.setGbTouchAimAccuracy(gbAim)
-                    Actions.setGbTouchResponseSpeed(gbResp)
-                    Actions.setGbTouchTapStability(gbTap)
-                    Actions.applyRedMagicInstantActionSpeed(game)
-
-                    // Apply Hardware Downscaling
-                    Actions.applyDownscaleAndFps(game, ds, fps)
-                    Actions.applyCamperFilters(satMode)
-                    if (bypassCharge) {
-                        Actions.setBypassCharging(true)
-                    }
-                    if (stretchedHitbox) {
-                        Actions.applyStretchedHitboxView(game, false)
-                    } else if (wideFov) {
-                        Actions.applyMaintainYFov(game, true)
-                    }
-
-                    // 3. Pin process to Prime CPU cores immediately & lock 120Hz display mode
-                    Actions.pinGameProcess(game)
-                    Actions.lockHardware120HzDisplayMode()
-
-                    // 4. Pure Clean Volume Boost, Realme Dolby Footsteps & DAC Protection
-                    val dolbyPreset = sp.getInt("dolby_preset_$game", sp.getInt("dolby_preset", 0))
-                    if (dolbyPreset > 0) {
-                        Actions.applyHardwareDolbyAtmosPreset(dolbyPreset)
-                    }
-                    val cleanBoost = sp.getBoolean("clean_boost_$game", true)
-                    val cleanPct = sp.getInt("clean_boost_pct_$game", 50)
-                    if (cleanBoost) {
-                        AudioTest.setCleanVolumeBoost(this@AutoService, true, cleanPct)
-                        Actions.applyAudioAndDacFix(true)
-                        Actions.setSystemVolumeOverdriveShizuku(cleanPct)
-                    }
+                    // 2. Enforce Master Profile (810p + 120Hz + 800x600 Ultra + Dolby Scout + Touch IC)
+                    Actions.executeMasterProfile(this@AutoService, game, apply810pDisplay = true, launchGame = false)
                 }
 
-                // 60-Second Watchdog Tick
-                val now = System.currentTimeMillis()
-                if (now - watchdogTimer >= 60_000L) {
-                    watchdogTimer = now
-                    Sh.run("am force-stop com.xiaomi.joyose 2>/dev/null")
-                    Actions.watchdogTick(game)
-                    NativeTools.reportAdpfWork(8000000L)
+                // 3. Periodic Watchdog Maintenance: Terminate Joyose, pin CPU cores 0xfc, lock 120Hz
+                Sh.run("am force-stop com.xiaomi.joyose 2>/dev/null")
+                Actions.pinGameProcess(game)
+                Actions.lockHardware120HzDisplayMode()
+                updateNotification("HyperGameBooster Active", "🔥 120FPS + 810p + Dolby Scout + 480Hz Locked ($game)")
+                NativeTools.reportAdpfWork(8000000L)
+            } else if (gameHasRun) {
+                // Game was running and is now closed! Start/continue 5-minute (300,000 ms) countdown
+                if (shutdownStartTimeMs == 0L) {
+                    shutdownStartTimeMs = System.currentTimeMillis()
                 }
-            } else if (wasGameRunning) {
-                // Game closed! Restore stock framebuffer & settings automatically
-                Sh.run("wm size reset\nwm density reset")
-                AudioTest.setCleanVolumeBoost(this@AutoService, false, 0)
-                Actions.applyHardwareDolbyAtmosPreset(0)
-                Actions.applyAudioAndDacFix(false)
-                Actions.revertAll(game)
-                NativeTools.stopAdpfSession()
-                NativeTools.setWifiLowLatency(this@AutoService, false)
-                wasGameRunning = false
+                val elapsed = System.currentTimeMillis() - shutdownStartTimeMs
+                if (elapsed < 300_000L) {
+                    val remainingSec = ((300_000L - elapsed) / 1000L).coerceAtLeast(1L)
+                    updateNotification("HyperGameBooster: Game Closed", "⏳ Auto-Restoring Stock in ${remainingSec}s (Re-open game to cancel)")
+                } else {
+                    // 5 minutes expired! Revert everything to stock and reinstall system packages
+                    updateNotification("HyperGameBooster", "♻️ 5-Minute Timer Expired: Restoring Stock & Packages...")
+                    Actions.restoreToStock(game)
+                    try {
+                        AudioTest.disableEffects()
+                    } catch (_: Throwable) {}
+                    try {
+                        stopService(Intent(this@AutoService, OverlayService::class.java))
+                    } catch (_: Throwable) {}
+                    NativeTools.stopAdpfSession()
+                    NativeTools.setWifiLowLatency(this@AutoService, false)
+                    gameHasRun = false
+                    stopSelf()
+                    break
+                }
             }
 
-            delay(if (wasGameRunning) 5000L else 3000L)
+            delay(15000L)
         }
     }
 
