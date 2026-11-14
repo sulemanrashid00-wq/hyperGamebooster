@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "15.0-ApexSplitter120"
+        versionCode = 18
+        versionName = "16.0-MasterOneClick"
     }
 
     buildTypes {

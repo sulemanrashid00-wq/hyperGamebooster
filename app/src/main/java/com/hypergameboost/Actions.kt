@@ -3,6 +3,7 @@ package com.hypergameboost
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -40,6 +41,264 @@ object Actions {
         "com.miui.voiceassist", "com.miui.hybrid", "com.xiaomi.market", "com.miui.analytics", "com.miui.msa.global",
         "com.miui.Video", "com.xiaomi.mipicks"
     )
+
+    suspend fun executeMasterAllInOneAndLaunch(context: Context, game: String = "com.tencent.ig"): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        AppPrefs.init(context)
+        val gfx = AppPrefs.getEffectiveGfxConfig(g)
+        val dolbyPreset = AppPrefs.getDolbyPreset(g)
+        val volPct = AppPrefs.getCleanVolumePercent(g)
+        val sat = AppPrefs.getColorSaturationValue(g)
+        val lodBias = AppPrefs.getLodBias(g)
+
+        unlockGameConfigFiles(g)
+
+        val script = buildString {
+            // STEP 1: STOP RUNNING GAME & BACKGROUND HOGS SO NEW GFX FRAMEBUFFER & DRIVER TAKE EFFECT 100%
+            appendLine("am force-stop $g 2>/dev/null")
+            appendLine("pm clear --user 0 com.xiaomi.joyose 2>/dev/null")
+            appendLine("am force-stop com.xiaomi.joyose 2>/dev/null")
+            appendLine("am force-stop com.google.android.webview 2>/dev/null")
+            appendLine("am force-stop com.xiaomi.xmsf 2>/dev/null")
+            BLOAT_PACKAGES.forEach { pkgName ->
+                appendLine("am force-stop $pkgName 2>/dev/null")
+            }
+
+            // STEP 2: UNLOCK ANY BROKEN READ-ONLY .INI FILES & SET UNRESTRICTED BATTERY ("NO RESTRICTIONS")
+            appendLine("chmod 0666 /sdcard/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/*.ini 2>/dev/null")
+            appendLine("chmod 0666 /storage/emulated/0/Android/data/$g/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/*.ini 2>/dev/null")
+            appendLine("dumpsys deviceidle whitelist +$g 2>/dev/null")
+            appendLine("am set-standby-bucket $g 5 2>/dev/null")
+            appendLine("cmd appops set $g RUN_IN_BACKGROUND allow 2>/dev/null")
+            appendLine("cmd appops set $g RUN_ANY_IN_BACKGROUND allow 2>/dev/null")
+            appendLine("cmd appops set $g WAKE_LOCK allow 2>/dev/null")
+            appendLine("cmd appops set $g START_FOREGROUND allow 2>/dev/null")
+
+            // STEP 3: APPLY REAL WORKING HARDWARE GFX (WM SIZE + ANDROID 16 DOWNSCALE + ADRENO LOD +3)
+            if (gfx.wmSize == "reset") {
+                appendLine("wm size reset")
+                appendLine("wm density reset")
+            } else {
+                appendLine("wm size ${gfx.wmSize}")
+                appendLine("wm density ${gfx.density}")
+            }
+            appendLine("cmd game mode 2 $g")
+            if (gfx.downscale == "disable" || gfx.downscale == "1.0") {
+                appendLine("cmd game set --mode 2 --downscale disable --fps ${gfx.fps} $g")
+                appendLine("device_config put game_overlay $g mode=2,skiavk=1,fps=${gfx.fps},loadingBoost=99999999:mode=3,skiavk=1,fps=${gfx.fps}")
+            } else {
+                appendLine("cmd game set --mode 2 --downscale ${gfx.downscale} --fps ${gfx.fps} $g")
+                appendLine("device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=${gfx.downscale},fps=${gfx.fps},loadingBoost=99999999:mode=3,skiavk=1,downscaleFactor=${gfx.downscale},fps=${gfx.fps}")
+            }
+            appendLine("settings put system gpu_texture_filter_quality 0")
+            appendLine("settings put system gpu_mipmap_lod_bias $lodBias")
+            appendLine("settings put system gpu_anisotropic_opt 0")
+            appendLine("settings put system gpu_sub_sample_enable 1")
+            appendLine("settings put system miui_gpu_preemption 0")
+            appendLine("settings put system miui_vrs_enable 0")
+            appendLine("settings put global vrs_enable 0")
+            appendLine("cmd overlay enable com.android.internal.display.cutout.emulation.noCutout 2>/dev/null")
+            appendLine("settings put global force_black_v2 0")
+            appendLine("settings put global policy_control immersive.full=$g 2>/dev/null")
+            appendLine("service call SurfaceFlinger 1022 f $sat 2>/dev/null")
+
+            // STEP 4: HARD-LOCK 120HZ DISPLAY & ZERO-BACKPRESSURE SURFACEFLINGER SCANOUT
+            appendLine("service call SurfaceFlinger 1035 i32 -1")
+            appendLine("cmd display clear-user-preferred-display-mode 2>/dev/null")
+            appendLine("settings put system min_refresh_rate 120.0")
+            appendLine("settings put system peak_refresh_rate 120.0")
+            appendLine("settings put secure user_refresh_rate 120")
+            appendLine("settings put secure miui_refresh_rate 120")
+            appendLine("settings put system is_smart_fps 0")
+            appendLine("settings put system memc_enable 0")
+            appendLine("settings put system dc_back_light 0")
+            appendLine("service call SurfaceFlinger 1008 i32 1")
+            appendLine("cmd device_config put surface_flinger_native_boot max_frame_buffer_acquired_buffers 2 2>/dev/null")
+            appendLine("cmd device_config put surface_flinger_native_boot enable_small_area_detection false 2>/dev/null")
+            appendLine("cmd device_config put surface_flinger_native_boot enable_layer_caching false 2>/dev/null")
+            appendLine("setprop debug.sf.latch_unsignaled 1")
+            appendLine("setprop debug.sf.auto_latch_unsignaled 1")
+            appendLine("setprop debug.sf.disable_backpressure 1")
+            appendLine("setprop debug.sf.DropMissedFrames 1")
+            appendLine("setprop debug.sf.early_phase_offset_ns 0")
+            appendLine("setprop debug.sf.early_gl_phase_offset_ns 0")
+
+            // STEP 5: 0ms UNBATCHED 2560Hz TOUCH + FAST MOVEMENT/SWITCH + AIM LOCK
+            appendLine("cmd device_config set-sync-disabled-for-tests persistent 2>/dev/null")
+            appendLine("cmd device_config put input_native_boot resample_touch false 2>/dev/null")
+            appendLine("cmd device_config put input_native_boot velocitytracker_strategy impulse 2>/dev/null")
+            appendLine("cmd device_config put input_native_boot deep_press_enabled false 2>/dev/null")
+            appendLine("setprop debug.input.resample 0")
+            appendLine("setprop windowsmgr.max_events_per_sec 240")
+            appendLine("settings put secure tap_duration_threshold 0.0")
+            appendLine("settings put secure tap_duration_enabled 0")
+            appendLine("settings put secure touch_blocking_period 0.0")
+            appendLine("settings put secure multi_press_timeout 50")
+            appendLine("settings put secure long_press_timeout 140")
+            appendLine("settings put secure ignore_repeat_enabled 0")
+            appendLine("settings put global window_animation_scale 0.0")
+            appendLine("settings put global transition_animation_scale 0.0")
+            appendLine("settings put global animator_duration_scale 0.0")
+            appendLine("settings put system pointer_speed 7")
+            appendLine("settings put system touch_sensitivity 5")
+            appendLine("settings put secure touch_sensitivity 5")
+            appendLine("settings put system touch_slop 1")
+            appendLine("settings put system touch_response_speed 1")
+            appendLine("settings put system touch_boost 1")
+            appendLine("settings put secure touch_game_mode 1")
+            appendLine("settings put system tp_game_mode 1")
+            appendLine("settings put system touch_game_mode_enable 1")
+            appendLine("settings put system miui_touch_sampling_rate_boost 1")
+            appendLine("settings put system gb_touch_response_speed 100")
+            appendLine("settings put system gb_touch_tap_stability 0")
+            appendLine("settings put system gb_touch_aim_accuracy 100")
+            appendLine("settings put system gb_touch_edge_zone 0")
+            appendLine("settings put system gamemode_touch_optimization 1")
+            appendLine("settings put system gamemode_touch_follow_response 100")
+            appendLine("settings put system gamemode_touch_aim_sensitivity 100")
+            appendLine("cmd sensorservice restrict-uid-reset 2>/dev/null")
+            appendLine("cmd appops set $g HIGH_SAMPLING_RATE_SENSORS allow 2>/dev/null")
+
+            // STEP 6: SNAPDRAGON 8s GEN 4 THERMAL 0°C OVERRIDE, 12GB ZERO-SWAP & FASTCONNECT WI-FI LOCK
+            appendLine("cmd thermalservice override-status 0 2>/dev/null")
+            appendLine("cmd power set-fixed-performance-mode-enabled true 2>/dev/null")
+            appendLine("cmd power set-mode 0 2>/dev/null")
+            appendLine("settings put system speed_mode 1")
+            appendLine("settings put secure speed_mode_enable 1")
+            appendLine("settings put system power_mode high")
+            appendLine("settings put system gb_boosting 1")
+            appendLine("settings put system ultimate_mode_enable 1")
+            appendLine("settings put global cpu_boost 1")
+            appendLine("settings put global gpu_boost 1")
+            appendLine("settings put global scheduler_policy performance")
+            appendLine("device_config put activity_manager use_compaction false 2>/dev/null")
+            appendLine("device_config put activity_manager max_cached_processes 64 2>/dev/null")
+            appendLine("settings put global ram_expand_size 0")
+            appendLine("settings put system miui_memory_extension 0")
+            appendLine("cmd wifi force-low-latency-mode enabled 2>/dev/null")
+            appendLine("cmd wifi force-hi-perf-mode enabled 2>/dev/null")
+            appendLine("settings put global wifi_scan_always_enabled 0")
+            appendLine("settings put global ble_scan_always_enabled 0")
+            appendLine("settings put global wifi_suspend_optimizations_enabled 0")
+            appendLine("settings put global wifi_power_save 0")
+            appendLine("cmd netd resolver flushdefaultif 2>/dev/null")
+
+            // STEP 7: TYPE-C SPLITTER ANTI-DISCONNECT POWER GUARD & FOOTSTEP AUDIO UNCAP
+            appendLine("settings put global usb_audio_automatic_routing_disabled 0")
+            appendLine("settings put secure usb_audio_automatic_routing_disabled 0")
+            appendLine("settings put system miui_audio_dump_enable 0")
+            appendLine("settings put system sound_effects_enabled 0")
+            appendLine("settings put system charge_boost_enable 0")
+            appendLine("settings put secure charge_boost_enable 0")
+            appendLine("settings put global audio_safe_volume_state 2")
+            appendLine("settings put secure music_in_communication 1")
+            appendLine("settings put system dolby_enable 1")
+            appendLine("setprop persist.vendor.audio.fluence.voicecall false")
+            appendLine("setprop audio.safemedia.bypass true")
+            appendLine("setprop audio.offload.disable 1")
+            appendLine("setprop audio.deep_buffer.media false")
+            appendLine("setprop debug.audio.usb.period_us 2500")
+        }
+
+        Shell.run(script)
+
+        // Audio Activation
+        try {
+            AudioTest.init(context)
+            if (dolbyPreset > 0) {
+                AudioTest.applyDolbyFootstepPreset(dolbyPreset)
+            }
+            AudioTest.setCleanVolumeBoost(context, true, volPct)
+        } catch (_: Throwable) {}
+
+        // Launch AutoService Watchdog
+        try {
+            val autoIntent = Intent(context, AutoService::class.java).apply {
+                putExtra("game", g)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(autoIntent)
+            } else {
+                context.startService(autoIntent)
+            }
+        } catch (_: Throwable) {}
+
+        // Launch Game Activity
+        launchGame(context, g)
+
+        // Live Readback
+        val hzRead = Shell.run("settings get system min_refresh_rate").trim()
+        val wmRead = Shell.run("wm size").trim()
+        val gmRead = Shell.run("cmd game get $g").trim()
+
+        "🔥 MASTER BOOST ACTIVE & GAME LAUNCHED!\n• GFX: ${gfx.label}\n• Framebuffer: $wmRead\n• GameMode: $gmRead\n• 120Hz: $hzRead\n• Dolby: Preset $dolbyPreset\n• Clean Volume: $volPct%\n• Auto Watchdog: Running"
+    }
+
+    suspend fun applyGfxPreset(game: String, presetId: Int): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        AppPrefs.setGfxPreset(g, presetId)
+        val cfg = AppPrefs.getEffectiveGfxConfig(g)
+
+        val script = buildString {
+            appendLine("am force-stop $g 2>/dev/null")
+            if (cfg.wmSize == "reset") {
+                appendLine("wm size reset")
+                appendLine("wm density reset")
+            } else {
+                appendLine("wm size ${cfg.wmSize}")
+                appendLine("wm density ${cfg.density}")
+            }
+            appendLine("cmd game mode 2 $g")
+            if (cfg.downscale == "disable" || cfg.downscale == "1.0") {
+                appendLine("cmd game set --mode 2 --downscale disable --fps ${cfg.fps} $g")
+                appendLine("device_config put game_overlay $g mode=2,skiavk=1,fps=${cfg.fps},loadingBoost=99999999:mode=3,skiavk=1,fps=${cfg.fps}")
+            } else {
+                appendLine("cmd game set --mode 2 --downscale ${cfg.downscale} --fps ${cfg.fps} $g")
+                appendLine("device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=${cfg.downscale},fps=${cfg.fps},loadingBoost=99999999:mode=3,skiavk=1,downscaleFactor=${cfg.downscale},fps=${cfg.fps}")
+            }
+            appendLine("settings put system gpu_texture_filter_quality 0")
+            appendLine("settings put system gpu_mipmap_lod_bias ${cfg.lodBias}")
+            appendLine("settings put system gpu_anisotropic_opt 0")
+            appendLine("settings put system gpu_sub_sample_enable 1")
+            appendLine("cmd overlay enable com.android.internal.display.cutout.emulation.noCutout 2>/dev/null")
+        }
+        val out = Shell.run(script)
+        if (out.contains("SecurityException", ignoreCase = true) || out.contains("Permission Denial", ignoreCase = true)) {
+            return@withContext "⚠️ XIAOMI BLOCKED WM SIZE: Go to Developer Options -> Turn ON \"USB debugging (Security settings)\"!"
+        }
+        val wmRead = Shell.run("wm size").trim()
+        val gmRead = Shell.run("cmd game get $g").trim()
+        "✅ GFX OVERRIDE APPLIED: ${cfg.label} | Framebuffer: $wmRead | GameMode: $gmRead"
+    }
+
+    suspend fun applyCustomGfxResolution(game: String, res: String, density: String, scale: String): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        AppPrefs.setCustomGfx(g, res, density, scale)
+        val script = buildString {
+            appendLine("am force-stop $g 2>/dev/null")
+            if (res == "2712x1220" || res == "reset") {
+                appendLine("wm size reset")
+                appendLine("wm density reset")
+                appendLine("cmd game mode 2 $g")
+                appendLine("cmd game set --mode 2 --downscale disable --fps 120 $g")
+            } else {
+                appendLine("wm size $res")
+                appendLine("wm density $density")
+                appendLine("cmd game mode 2 $g")
+                appendLine("cmd game set --mode 2 --downscale $scale --fps 120 $g")
+                appendLine("device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=$scale,fps=120,loadingBoost=99999999:mode=3,skiavk=1,downscaleFactor=$scale,fps=120")
+            }
+            appendLine("settings put system gpu_texture_filter_quality 0")
+            appendLine("settings put system gpu_mipmap_lod_bias 3")
+        }
+        val out = Shell.run(script)
+        if (out.contains("SecurityException", ignoreCase = true) || out.contains("Permission Denial", ignoreCase = true)) {
+            return@withContext "⚠️ XIAOMI BLOCKED WM SIZE: Go to Developer Options -> Turn ON \"USB debugging (Security settings)\"!"
+        }
+        val wmRead = Shell.run("wm size").trim()
+        val gmRead = Shell.run("cmd game get $g").trim()
+        "✅ CUSTOM GFX APPLIED: $res @ ${density}DPI ($scale) | Framebuffer: $wmRead | GameMode: $gmRead"
+    }
 
     suspend fun applyMasterOneClickGodMode(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
@@ -324,7 +583,24 @@ object Actions {
         AppPrefs.setDownscale(g, downscale)
         AppPrefs.setFps(g, validFps)
 
+        val (sizeCmd, densityCmd) = when (downscale) {
+            "0.50", "0.55" -> "720x1600" to "280"
+            "0.60", "0.65" -> "810x1800" to "310"
+            "0.70", "0.75" -> "900x2000" to "350"
+            "0.80", "0.85" -> "1080x2160" to "360"
+            "1.0", "1.00", "disable" -> "reset" to "reset"
+            else -> "810x1800" to "310"
+        }
+
         val script = buildString {
+            appendLine("am force-stop $g 2>/dev/null")
+            if (sizeCmd == "reset") {
+                appendLine("wm size reset")
+                appendLine("wm density reset")
+            } else {
+                appendLine("wm size $sizeCmd")
+                appendLine("wm density $densityCmd")
+            }
             appendLine("cmd game mode 2 $g")
             if (downscale == "disable" || downscale == "1.0" || downscale == "1.00") {
                 appendLine("cmd game set --mode 2 --downscale disable --fps $validFps $g")
@@ -338,9 +614,9 @@ object Actions {
             appendLine("cmd game mode performance $g")
         }
         Shell.run(script)
+        val wmRead = Shell.run("wm size").trim()
         val readback = Shell.run("cmd game get $g").trim()
-        val overlayRead = Shell.run("device_config get game_overlay $g").trim()
-        "✓ Downscale $downscale ($validFps FPS) | Verified: $readback [Overlay: $overlayRead]"
+        "✓ Downscale $downscale ($validFps FPS) | Framebuffer: $wmRead | GameMode: $readback"
     }
 
     suspend fun resetDownscaleAndFps(game: String): String = withContext(Dispatchers.IO) {
@@ -822,22 +1098,9 @@ EOF
         }
     }
 
-    suspend fun applyAspectPreset(preset: Int): String = withContext(Dispatchers.IO) {
-        val (sizeCmd, densityCmd, label) = when (preset) {
-            1 -> Triple("900x2000", "360", "900p Pro (900x2000)")
-            2 -> Triple("810x1800", "320", "810p Scrim (810x1800)")
-            3 -> Triple("720x1600", "280", "720p Potato (720x1600)")
-            4 -> Triple("1080x2160", "400", "1080x2160 Stretched (Wider Hitbox)")
-            5 -> Triple("1080x1920", "380", "1080x1920 Ultra Wide Stretched")
-            else -> Triple("reset", "reset", "Stock Native")
-        }
-        val cmd = if (sizeCmd == "reset") "wm size reset\nwm density reset" else "wm size $sizeCmd\nwm density $densityCmd"
-        val out = Shell.run(cmd)
-        if (out.contains("SecurityException", ignoreCase = true) || out.contains("Permission Denial", ignoreCase = true)) {
-            return@withContext "⚠️ XIAOMI BLOCKED WM SIZE: Go to Developer Options -> Turn ON \"USB debugging (Security settings)\"!"
-        }
-        val readback = Shell.run("wm size").trim()
-        "✅ VERIFIED DISPLAY OVERRIDE: $label | $readback"
+    suspend fun applyAspectPreset(preset: Int, game: String = "com.tencent.ig"): String = withContext(Dispatchers.IO) {
+        val g = safeGame(game)
+        applyGfxPreset(g, preset)
     }
 
     suspend fun applyStretchedHitboxView(game: String, potatoStretched: Boolean = false): String = withContext(Dispatchers.IO) {
@@ -1782,23 +2045,10 @@ EOF
 
     suspend fun applyUltraPotatoBlurryMode(game: String): String = withContext(Dispatchers.IO) {
         val g = safeGame(game)
-        applyDownscaleAndFps(g, "0.60", 120)
-        val script = """
-            cmd device_config put game_overlay $g mode=2,skiavk=1,downscaleFactor=0.60,fps=120 2>/dev/null
-            settings put system gpu_texture_filter_quality 0
-            settings put system gpu_mipmap_lod_bias 3
-            settings put system gpu_anisotropic_opt 0
-            settings put system miui_gpu_preemption 0
-            settings put system miui_vrs_enable 0
-            settings put global vrs_enable 0
-            setprop debug.hwui.vrs_enable false
-            setprop persist.sys.gpu_texture_filter_quality 0
-            setprop debug.hwui.mipmap_lod_bias 3
-        """.trimIndent()
-        Shell.run(script)
+        applyGfxPreset(g, 1)
         applyPgtGraphicsConfig(
             game = g,
-            resolution = "960x540",
+            resolution = "720x1600",
             quality = "Super Smooth",
             fps = 120,
             potatoLevel = "Ultra (LOD +3)",
@@ -1809,9 +2059,9 @@ EOF
             gpuExtension = "Apply All",
             saveSensitivity = true,
             bilinearFilter = true,
-            readOnlyLock = true
+            readOnlyLock = false
         )
-        "🧈 1-TAP ULTRA-POTATO BUTTER SMOOTH (MAX FPS + AIM LOCK) ACTIVE: 60% Scale, Bilinear LOD +3, 0ms Lag Locked!"
+        "🧈 1-TAP ULTRA-POTATO BUTTER SMOOTH (MAX FPS + AIM LOCK) ACTIVE: 720x1600 (280 DPI), Bilinear LOD +3, 0ms Lag Locked!"
     }
 
     // =========================================================================

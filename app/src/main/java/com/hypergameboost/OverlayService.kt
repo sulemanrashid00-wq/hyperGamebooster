@@ -157,7 +157,7 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Esports Overlay", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v15.0 Apex Active")
+            .setContentTitle("HyperGameBooster v16.0 Master Active")
             .setContentText("Magnetic Aim & 2560Hz Touch Engine Running")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)

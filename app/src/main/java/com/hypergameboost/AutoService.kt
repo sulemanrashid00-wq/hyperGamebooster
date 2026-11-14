@@ -34,7 +34,7 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v15.0 Apex Watchdog")
+            .setContentTitle("HyperGameBooster v16.0 Master Watchdog")
             .setContentText("Monitoring $game (FastConnect Wi-Fi & 120 FPS Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
@@ -170,7 +170,8 @@ class AutoService : Service() {
                     NativeTools.reportAdpfWork(8000000L)
                 }
             } else if (wasGameRunning) {
-                // Game closed! Restore stock settings automatically
+                // Game closed! Restore stock framebuffer & settings automatically
+                Sh.run("wm size reset\nwm density reset")
                 AudioTest.setCleanVolumeBoost(this@AutoService, false, 0)
                 Actions.applyHardwareDolbyAtmosPreset(0)
                 Actions.applyAudioAndDacFix(false)

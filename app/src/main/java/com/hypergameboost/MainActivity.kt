@@ -333,8 +333,10 @@ fun App() {
     var gbTapStability by remember { mutableFloatStateOf(0f) }
     var selectedDriver by remember { mutableStateOf("system") }
     var networkMode by remember { mutableStateOf("pure_wifi") }
+    var currentGfxPreset by remember { mutableIntStateOf(AppPrefs.getGfxPreset(selectedGame)) }
 
     fun loadProfileForGame(game: String) {
+        currentGfxPreset = AppPrefs.getGfxPreset(game)
         pgtFps = sp.getInt("fps_$game", 120)
         pgtRes = sp.getString("res_$game", "1280x720") ?: "1280x720"
         pgtQual = sp.getString("qual_$game", "Smooth") ?: "Smooth"
@@ -505,7 +507,7 @@ fun App() {
                     border = BorderStroke(1.dp, Color(0xFF00E5FF))
                 ) {
                     Text(
-                        "v12.0 TRUE FUNCTIONAL",
+                        "v16.0 MASTER ONE-CLICK",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF00E5FF),
@@ -588,51 +590,73 @@ fun App() {
                 // =============================================================
                 0 -> {
 
-                    // 👑 v15.0 1-CLICK MASTER GOD-MODE (TURN ON EVERYTHING AT ONCE)
+                    // 🔥 v16.0 MASTER HERO BUTTON: APPLY ALL USER SETTINGS & START GAME
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF142436)),
-                        border = BorderStroke(2.dp, Color(0xFFFFD700))
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1200)),
+                        border = BorderStroke(2.dp, Color(0xFFFF9100))
                     ) {
                         Column(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("👑", fontSize = 18.sp)
+                                Text("🔥", fontSize = 20.sp)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "1-CLICK MASTER GOD-MODE (APEX EDITION)",
+                                    "1-CLICK MAX EVERYTHING & START GAME",
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFD700),
-                                    fontSize = 13.5.sp
+                                    color = Color(0xFFFF9100),
+                                    fontSize = 14.sp
                                 )
                             }
                             Text(
-                                "Activates 120Hz display lock, 0.65 Potato downscale, 2560Hz unbatched touch, Type-C Splitter VBUS guard, Dolby footstep enhancer, Wi-Fi low-latency lock & Cores fc pinning in ONE click!",
-                                color = Color(0xFF90A4AE),
-                                fontSize = 10.5.sp
+                                "Applies your saved GFX (wm size + downscale), 120Hz lock, 2560Hz touch, Type-C Splitter guard, Dolby footsteps, Wi-Fi lock & launches game!",
+                                color = Color(0xFFCFD8DC),
+                                fontSize = 11.sp
                             )
                             Button(
-                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
                                 onClick = {
                                     triggerVibe(ctx)
-                                    statusLog = "👑 Activating 1-Click Master God-Mode..."
+                                    statusLog = "🔥 Force-stopping background game & applying all user settings..."
                                     scope.launch {
-                                        val res = Actions.applyMasterOneClickGodMode(selectedGame)
+                                        val res = Actions.executeMasterAllInOneAndLaunch(ctx, selectedGame)
                                         statusLog = res
-                                        Toast.makeText(ctx, "👑 Master God-Mode Activated!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(ctx, "🔥 1-Click Master Boost Applied & Game Started!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00)),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text(
-                                    "👑 1-CLICK ACTIVATE EVERYTHING (ALL BOOSTS + 120 FPS + AIM + TOUCH + WIFI)",
-                                    color = Color.Black,
+                                    "🔥 1-CLICK MAX EVERYTHING + APPLY MY SETTINGS & START GAME",
+                                    color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.5.sp
+                                    fontSize = 11.sp
+                                )
+                            }
+
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                onClick = {
+                                    triggerVibe(ctx)
+                                    statusLog = "🔙 Restoring phone to stock 1.5K display and default settings..."
+                                    scope.launch {
+                                        val res = Actions.revertAll(selectedGame)
+                                        statusLog = res
+                                        currentGfxPreset = 0
+                                        Toast.makeText(ctx, "Stock settings restored!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF90A4AE)),
+                                border = BorderStroke(1.dp, Color(0xFF546E7A)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    "🔙 RESTORE STOCK SETTINGS (Default 1.5K Screen & Normal Clocks)",
+                                    fontSize = 11.sp
                                 )
                             }
                         }
@@ -1156,6 +1180,51 @@ fun App() {
                 // TAB 1: GFX / RES (Display Hz, Wide FOV, Smoke Anti-Lag, PGT+)
                 // =============================================================
                 1 -> {
+                    SectionCard("🎮 HARDWARE FRAMEBUFFER GFX PRESETS (100% VISIBLE IN-GAME)", "Forces cold framebuffer reload (wm size + density + downscale + LOD +3) on click") {
+                        Text("Active selection is automatically applied by 1-Click Master Button:", color = Color(0xFFB0BEC5), fontSize = 11.sp)
+
+                        val gfxPresets = listOf(
+                            Triple(1, "720p Potato", "720x1600 (280 DPI, scale 0.55)"),
+                            Triple(2, "810p Scrim", "810x1800 (310 DPI, scale 0.65)"),
+                            Triple(3, "900p Pro", "900x2000 (350 DPI, scale 0.75)"),
+                            Triple(4, "Stretched Wide", "1080x2160 (360 DPI, scale 0.80)"),
+                            Triple(5, "iPad 4:3 View", "1200x1600 (300 DPI, scale 0.85)"),
+                            Triple(0, "Native 1.5K", "2712x1220 (Stock)")
+                        )
+
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            gfxPresets.forEach { (presetId, title, sub) ->
+                                val isSelected = currentGfxPreset == presetId
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        triggerVibe(ctx)
+                                        currentGfxPreset = presetId
+                                        AppPrefs.setGfxPreset(selectedGame, presetId)
+                                        saveProfileForGame(selectedGame)
+                                        statusLog = "🎮 Applying $title and forcing UE4 framebuffer reload..."
+                                        scope.launch {
+                                            val res = Actions.applyGfxPreset(selectedGame, presetId)
+                                            statusLog = res
+                                            Toast.makeText(ctx, res, Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFF00E676),
+                                        selectedLabelColor = Color.Black
+                                    ),
+                                    label = {
+                                        Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                            Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 11.sp)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
                     SectionCard("🖥️ ZERO-LATENCY SURFACEFLINGER SCANOUT (1:1 FRAME SYNC)", "Push frames to 120Hz panel immediately without buffer queue delay") {
                         Button(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -1220,7 +1289,10 @@ fun App() {
                             enabled = isReady,
                             onClick = {
                                 triggerVibe(ctx)
-                                exec { Actions.applyAspectPreset(5) }
+                                currentGfxPreset = 5
+                                AppPrefs.setGfxPreset(selectedGame, 5)
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyGfxPreset(selectedGame, 5) }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
                             shape = RoundedCornerShape(10.dp)
@@ -1293,8 +1365,10 @@ fun App() {
                             onClick = {
                                 stretchedHitboxActive = false
                                 maintainYFov = false
+                                currentGfxPreset = 0
+                                AppPrefs.setGfxPreset(selectedGame, 0)
                                 saveProfileForGame(selectedGame)
-                                exec { Actions.resetToNativeResolution(selectedGame) }
+                                exec { Actions.applyGfxPreset(selectedGame, 0) }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2836)),
                             border = BorderStroke(1.dp, Color(0xFF546E7A)),
@@ -1307,18 +1381,35 @@ fun App() {
                             OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = {
                                 stretchedHitboxActive = true
                                 maintainYFov = true
+                                currentGfxPreset = 4
+                                AppPrefs.setGfxPreset(selectedGame, 4)
                                 saveProfileForGame(selectedGame)
-                                exec { Actions.applyStretchedHitboxView(selectedGame, true) }
+                                exec { Actions.applyGfxPreset(selectedGame, 4) }
                             }) {
                                 Text("Potato Stretched", fontSize = 10.sp)
                             }
-                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(1) } }) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = {
+                                currentGfxPreset = 3
+                                AppPrefs.setGfxPreset(selectedGame, 3)
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyGfxPreset(selectedGame, 3) }
+                            }) {
                                 Text("900p Pro", fontSize = 10.sp)
                             }
-                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(2) } }) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = {
+                                currentGfxPreset = 2
+                                AppPrefs.setGfxPreset(selectedGame, 2)
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyGfxPreset(selectedGame, 2) }
+                            }) {
                                 Text("810p Scrim", fontSize = 10.sp)
                             }
-                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.applyAspectPreset(3) } }) {
+                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = {
+                                currentGfxPreset = 1
+                                AppPrefs.setGfxPreset(selectedGame, 1)
+                                saveProfileForGame(selectedGame)
+                                exec { Actions.applyGfxPreset(selectedGame, 1) }
+                            }) {
                                 Text("720p Potato", fontSize = 10.sp)
                             }
                         }
@@ -1343,7 +1434,8 @@ fun App() {
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             enabled = isReady,
                             onClick = {
-                                pgtRes = "960x540"
+                                currentGfxPreset = 1
+                                pgtRes = "720x1600"
                                 pgtQual = "Super Smooth"
                                 pgtFps = 120
                                 pgtPotatoLevel = "Ultra (LOD +3)"
@@ -1351,7 +1443,8 @@ fun App() {
                                 pgtShadow = false
                                 pgtMsaa = false
                                 pgtBilinear = true
-                                downscaleFactor = "0.60"
+                                downscaleFactor = "0.55"
+                                AppPrefs.setGfxPreset(selectedGame, 1)
                                 saveProfileForGame(selectedGame)
                                 exec { Actions.applyUltraPotatoBlurryMode(selectedGame) }
                             },
@@ -1376,14 +1469,33 @@ fun App() {
                                 "Native 1.5K (Stock)" to ("2712x1220" to "disable")
                             ).forEach { (label, pair) ->
                                 val (res, scale) = pair
+                                val isSelected = (res == "2712x1220" && currentGfxPreset == 0) || (res == "800x600" && currentGfxPreset == 6 && pgtRes == "800x600") || (res == "960x540" && currentGfxPreset == 6 && pgtRes == "960x540") || (res == "1280x720" && currentGfxPreset == 6 && pgtRes == "1280x720") || (res == "1440x720" && currentGfxPreset == 6 && pgtRes == "1440x720") || pgtRes == res
                                 FilterChip(
-                                    selected = pgtRes == res || downscaleFactor == scale,
+                                    selected = isSelected,
                                     onClick = {
                                         pgtRes = res
                                         downscaleFactor = scale
                                         saveProfileForGame(selectedGame)
-                                        exec { Actions.applyDownscaleAndFps(selectedGame, scale, pgtFps) }
+                                        if (res == "2712x1220" || scale == "disable") {
+                                            currentGfxPreset = 0
+                                            AppPrefs.setGfxPreset(selectedGame, 0)
+                                            exec { Actions.applyGfxPreset(selectedGame, 0) }
+                                        } else {
+                                            currentGfxPreset = 6
+                                            val d = when (res) {
+                                                "800x600" -> "260"
+                                                "960x540" -> "240"
+                                                "1280x720" -> "280"
+                                                "1440x720" -> "300"
+                                                else -> "280"
+                                            }
+                                            exec { Actions.applyCustomGfxResolution(selectedGame, res, d, scale) }
+                                        }
                                     },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFF00E676),
+                                        selectedLabelColor = Color.Black
+                                    ),
                                     label = { Text(label, fontSize = 11.sp) }
                                 )
                             }
@@ -1738,6 +1850,7 @@ fun App() {
                                     onClick = {
                                         triggerVibe(ctx)
                                         activeDolbyPreset = pId
+                                        AppPrefs.setDolbyPreset(selectedGame, pId)
                                         saveProfileForGame(selectedGame)
                                         val res = Actions.applyHardwareDolbyAtmosPreset(pId)
                                         statusLog = res
@@ -1831,6 +1944,7 @@ fun App() {
                             },
                             onValueChangeFinished = {
                                 isCleanBoostActive = cleanBoostPercent > 0
+                                AppPrefs.setCleanVolumePercent(selectedGame, cleanBoostPercent)
                                 saveProfileForGame(selectedGame)
                                 triggerVibe(ctx)
                                 val res = AudioTest.setCleanVolumeBoost(ctx, isCleanBoostActive, cleanBoostPercent)
@@ -2201,14 +2315,42 @@ fun App() {
                             onAction = { exec { Actions.applyLowPingNetworkFirewall(selectedGame, true) } },
                             offAction = { exec { Actions.applyLowPingNetworkFirewall(selectedGame, false) } }
                         )
+                        val currentDns = AppPrefs.getDnsMode(selectedGame)
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.setGamingDns("cloudflare") } }) {
-                                Text("Cloudflare 1.1.1.1", fontSize = 10.sp)
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    AppPrefs.setDnsMode(selectedGame, 1)
+                                    exec { Actions.setGamingDns("cloudflare") }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (currentDns == 1) Color(0xFF00E676) else Color(0xFF1E2836)
+                                )
+                            ) {
+                                Text("Cloudflare 1.1.1.1", fontSize = 10.sp, color = if (currentDns == 1) Color.Black else Color.White)
                             }
-                            Button(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.setGamingDns("google") } }) {
-                                Text("Google 8.8.8.8", fontSize = 10.sp)
+                            Button(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    AppPrefs.setDnsMode(selectedGame, 2)
+                                    exec { Actions.setGamingDns("google") }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (currentDns == 2) Color(0xFF00E676) else Color(0xFF1E2836)
+                                )
+                            ) {
+                                Text("Google 8.8.8.8", fontSize = 10.sp, color = if (currentDns == 2) Color.Black else Color.White)
                             }
-                            OutlinedButton(modifier = Modifier.weight(1f), enabled = isReady, onClick = { exec { Actions.setGamingDns("auto") } }) {
+                            OutlinedButton(
+                                modifier = Modifier.weight(1f),
+                                enabled = isReady,
+                                onClick = {
+                                    AppPrefs.setDnsMode(selectedGame, 0)
+                                    exec { Actions.setGamingDns("auto") }
+                                }
+                            ) {
                                 Text("Auto DNS", fontSize = 10.sp)
                             }
                         }
