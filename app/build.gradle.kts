@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "17.0-AutoLockedPro"
+        versionCode = 20
+        versionName = "18.0-RealmeGfxPro"
     }
 
     buildTypes {

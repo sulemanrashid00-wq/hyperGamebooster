@@ -18,11 +18,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * AutoService - HyperOS 3 Smart Auto-Profile & 60s Watchdog Engine (v4.0 God-Tier)
- * 1. Automatically detects game start via PID transition (`pidof $game`)
- * 2. Instantly loads and applies per-game saved profile (FPS, Downscale, Touch IC, Saturation, Prime Pinning)
- * 3. 60-Second Watchdog Loop: kills Joyose, locks 120Hz hardware display mode (defeats 42°C drop), re-enforces thermal 0, pins PID via taskset ff
- * 4. The moment game closes (PID becomes empty), automatically reverts 100% to stock settings
+ * AutoService - Realme GT Game Space & 5-Minute Watchdog Engine (v18.0)
+ * 1. Automatically tracks game process via `pidof $game`
+ * 2. Continuously pins UE4 child threads (RenderThread, GameThread, RHIThread) to Snapdragon Prime/Gold cores (`0xfc`, `renice -20`)
+ * 3. Keeps Joyose terminated and 120Hz display mode locked (-1 override)
+ * 4. 5-Minute (300-second) Post-Game Auto-Revert:
+ *    When game exits, begins 300s grace countdown. If user doesn't re-open game,
+ *    reverts phone 100% to stock (wm size reset, pm install-existing, audio DSP off) and stops service!
  */
 class AutoService : Service() {
     private var job: Job? = null
@@ -32,10 +34,12 @@ class AutoService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val game = intent?.getStringExtra(EXTRA_GAME) ?: "com.tencent.ig"
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Realme GT Game Space Watchdog", NotificationManager.IMPORTANCE_LOW)
+        )
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v17.0 Master Watchdog")
-            .setContentText("Monitoring $game (120FPS + 810p + Dolby Scout Active)")
+            .setContentTitle("Realme GT Game Space Active")
+            .setContentText("Monitoring $game (GT Mode + 120 FPS + Dolby Scout)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
@@ -79,45 +83,28 @@ class AutoService : Service() {
                 shutdownStartTimeMs = 0L
                 if (!gameHasRun) {
                     gameHasRun = true
-
-                    // 1. Force Unrestricted Battery & Safe Throttler Disarm
-                    Actions.applyUnrestrictedPowerPolicy(game)
-                    Actions.disableOrClearSystemThrottlers()
-                    Actions.esportsMode(game, packageName)
-                    NativeTools.startAdpfSession(this@AutoService, 8333333L)
-                    NativeTools.setWifiLowLatency(this@AutoService, true)
-
-                    // 2. Enforce Master Profile (810p + 120Hz + 800x600 Ultra + Dolby Scout + Touch IC)
-                    Actions.executeMasterProfile(this@AutoService, game, apply810pDisplay = true, launchGame = false)
+                    // Enforce GT Boost & Pinning
+                    Actions.executeMasterGtBoost(this@AutoService, game, applyDisplayResolution = true, launchGame = false)
                 }
 
-                // 3. Periodic Watchdog Maintenance: Terminate Joyose, pin CPU cores 0xfc, lock 120Hz
+                // Periodic Watchdog Maintenance: Kill Joyose, pin CPU cores 0xfc, lock 120Hz
                 Sh.run("am force-stop com.xiaomi.joyose 2>/dev/null")
                 Actions.pinGameProcess(game)
                 Actions.lockHardware120HzDisplayMode()
-                updateNotification("HyperGameBooster Active", "🔥 120FPS + 810p + Dolby Scout + 480Hz Locked ($game)")
-                NativeTools.reportAdpfWork(8000000L)
+                updateNotification("Realme GT Game Space Active", "🔥 120FPS + 810p + Dolby Scout + 480Hz ($game)")
             } else if (gameHasRun) {
-                // Game was running and is now closed! Start/continue 5-minute (300,000 ms) countdown
+                // Game was running and is now closed: start / continue 5-minute (300,000 ms) countdown
                 if (shutdownStartTimeMs == 0L) {
                     shutdownStartTimeMs = System.currentTimeMillis()
                 }
                 val elapsed = System.currentTimeMillis() - shutdownStartTimeMs
                 if (elapsed < 300_000L) {
                     val remainingSec = ((300_000L - elapsed) / 1000L).coerceAtLeast(1L)
-                    updateNotification("HyperGameBooster: Game Closed", "⏳ Auto-Restoring Stock in ${remainingSec}s (Re-open game to cancel)")
+                    updateNotification("Game Closed ($game)", "⏳ Auto-Reverting Stock in ${remainingSec}s (Re-open game to cancel)")
                 } else {
                     // 5 minutes expired! Revert everything to stock and reinstall system packages
-                    updateNotification("HyperGameBooster", "♻️ 5-Minute Timer Expired: Restoring Stock & Packages...")
-                    Actions.restoreToStock(game)
-                    try {
-                        AudioTest.disableEffects()
-                    } catch (_: Throwable) {}
-                    try {
-                        stopService(Intent(this@AutoService, OverlayService::class.java))
-                    } catch (_: Throwable) {}
-                    NativeTools.stopAdpfSession()
-                    NativeTools.setWifiLowLatency(this@AutoService, false)
+                    updateNotification("Realme GT Game Space", "♻️ 5-Minute Timer Expired: Restoring 100% Stock State...")
+                    Actions.executeFactoryFreshReset(this@AutoService, game)
                     gameHasRun = false
                     stopSelf()
                     break
@@ -135,6 +122,6 @@ class AutoService : Service() {
 
     companion object {
         const val EXTRA_GAME = "game"
-        private const val CHANNEL = "auto_watchdog_v8"
+        private const val CHANNEL = "realme_gt_watchdog_v18"
     }
 }

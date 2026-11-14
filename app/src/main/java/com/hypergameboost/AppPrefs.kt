@@ -4,24 +4,25 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * GfxConfig - Container for complete hardware framebuffer resolution & downscale parameters.
+ * ResolutionStep - Realme Resolution & Scrims Downscale Step mapping
  */
-data class GfxConfig(
-    val presetId: Int,
+data class ResolutionStep(
+    val step: Int,
+    val percent: Int,
     val label: String,
-    val wmSize: String,       // e.g. "810x1800" or "reset"
-    val density: String,      // e.g. "310" or "reset"
-    val downscale: String,    // e.g. "0.55" or "disable"
-    val fps: Int = 120,
-    val lodBias: Int = 3
+    val wmSize: String,
+    val density: String,
+    val downscaleFactor: String
 )
 
 /**
- * AppPrefs - Unified Persistent State Engine (v17.0 Auto-Locked Custom Profile)
- * Pre-configured with the exact 22-point master profile:
- * 810p Scrims (810x1800 @ 310 DPI, 0.55 downscale, 120 FPS, LOD +3)
- * Dolby Voice/Scout (Preset 2), 70% Clean Volume, 480Hz Jiggle God, 100/100/100 Touch IC,
- * SkiaGL + System Driver, FastConnect Wi-Fi, Bypass Charging & Type-C Splitter Guard.
+ * AppPrefs - Realme GT Game Space & TSOML GFX Persistent State Engine (v18.0)
+ * Pre-initialized to user's exact preferred competitive defaults:
+ * - High Performance GT Mode (Auto-active)
+ * - 810p Scrims (810x1800 @ 310 DPI, 0.60 downscale, 120 FPS, LOD +3)
+ * - 100% Touch & Aim, 100% Swipe 480Hz, 100% Tap Stability
+ * - TSOML GFX: 800x600 Super Smooth 120FPS, LOD +3, Bilinear ON, Simple Shader ON
+ * - Realme Dolby Voice / Scout (Preset 2), 70% Clean Volume Boost, Splitter Guard ON
  */
 object AppPrefs {
     @Volatile
@@ -34,7 +35,19 @@ object AppPrefs {
     }
 
     private fun getSp(): SharedPreferences? =
-        appContext?.getSharedPreferences("hgb_profiles", Context.MODE_PRIVATE)
+        appContext?.getSharedPreferences("realme_game_space_v18", Context.MODE_PRIVATE)
+
+    // Resolution Steps (5 Steps)
+    val RESOLUTION_STEPS = listOf(
+        ResolutionStep(1, 55, "800x600 Ultra Potato", "720x1600", "280", "0.55"),
+        ResolutionStep(2, 65, "810p Scrims + 800x600 Super Smooth", "810x1800", "310", "0.60"),
+        ResolutionStep(3, 75, "900p Esports Pro", "900x2000", "350", "0.75"),
+        ResolutionStep(4, 85, "iPad 4:3 Wide Hitbox", "1200x1600", "300", "0.85"),
+        ResolutionStep(5, 100, "Native 1.5K (1220x2712 Stock)", "reset", "reset", "disable")
+    )
+
+    fun getResolutionStep(step: Int): ResolutionStep =
+        RESOLUTION_STEPS.find { it.step == step } ?: RESOLUTION_STEPS[1]
 
     // 1. Target Package
     fun getSelectedPkg(): String =
@@ -44,99 +57,101 @@ object AppPrefs {
         getSp()?.edit()?.putString("selected_pkg", pkg)?.apply()
     }
 
-    // 2. GFX Presets & Framebuffer Config
-    // 0 = Native 1.5K (reset, reset, disable)
-    // 1 = 720p Ultra-Potato (720x1600, 280 DPI, scale 0.55)
-    // 2 = 810p Scrims (810x1800, 310 DPI, scale 0.55) [v17.0 DEFAULT]
-    // 3 = 900p Pro (900x2000, 350 DPI, scale 0.75)
-    // 4 = Stretched Wide Hitbox (1080x2160, 360 DPI, scale 0.80)
-    // 5 = iPad 4:3 View (1200x1600, 300 DPI, scale 0.85)
-    // 6 = Custom PGT+ (custom wm size & scale)
-    fun getGfxPreset(game: String): Int =
-        getSp()?.getInt("gfx_preset_$game", 2) ?: 2
+    // 2. Realme 3-Way Performance Mode (0 = Low Power, 1 = Balanced, 2 = High Performance GT Mode)
+    fun getPerformanceMode(game: String): Int =
+        getSp()?.getInt("perf_mode_$game", 2) ?: 2
 
-    fun setGfxPreset(game: String, preset: Int) {
-        getSp()?.edit()?.putInt("gfx_preset_$game", preset)?.apply()
+    fun setPerformanceMode(game: String, mode: Int) {
+        getSp()?.edit()?.putInt("perf_mode_$game", mode)?.apply()
     }
 
-    fun getCustomWmSize(game: String): String =
-        getSp()?.getString("custom_wm_size_$game", "810x1800") ?: "810x1800"
+    // 3. Realme Interactive Sliding Bars (0..100)
+    fun getTouchAimSensitivity(game: String): Int =
+        getSp()?.getInt("touch_aim_$game", 100) ?: 100
 
-    fun getCustomWmDensity(game: String): String =
-        getSp()?.getString("custom_wm_density_$game", "310") ?: "310"
-
-    fun getCustomDownscale(game: String): String =
-        getSp()?.getString("custom_scale_$game", "0.55") ?: "0.55"
-
-    fun setCustomGfx(game: String, size: String, density: String, scale: String) {
-        getSp()?.edit()
-            ?.putInt("gfx_preset_$game", 6)
-            ?.putString("custom_wm_size_$game", size)
-            ?.putString("custom_wm_density_$game", density)
-            ?.putString("custom_scale_$game", scale)
-            ?.apply()
+    fun setTouchAimSensitivity(game: String, value: Int) {
+        getSp()?.edit()?.putInt("touch_aim_$game", value.coerceIn(0, 100))?.apply()
     }
 
-    fun getEffectiveGfxConfig(game: String): GfxConfig {
-        val preset = getGfxPreset(game)
-        val fps = getTargetFps(game)
-        val lod = getLodBias(game)
-        return when (preset) {
-            0 -> GfxConfig(0, "Native 1.5K (Stock)", "reset", "reset", "disable", fps, 0)
-            1 -> GfxConfig(1, "720p Ultra-Potato", "720x1600", "280", "0.55", fps, lod)
-            2 -> GfxConfig(2, "810p Scrims (800x600 Ultra)", "810x1800", "310", "0.55", fps, lod)
-            3 -> GfxConfig(3, "900p Pro", "900x2000", "350", "0.75", fps, lod)
-            4 -> GfxConfig(4, "Stretched Wide Hitbox", "1080x2160", "360", "0.80", fps, lod)
-            5 -> GfxConfig(5, "iPad 4:3 View", "1200x1600", "300", "0.85", fps, lod)
-            6 -> {
-                val size = getCustomWmSize(game)
-                val density = getCustomWmDensity(game)
-                val scale = getCustomDownscale(game)
-                GfxConfig(6, "Custom PGT+ ($size @ ${density}DPI, $scale)", size, density, scale, fps, lod)
-            }
-            else -> GfxConfig(2, "810p Scrims (800x600 Ultra)", "810x1800", "310", "0.55", fps, lod)
-        }
+    fun getSwipeJiggleResponse(game: String): Int =
+        getSp()?.getInt("swipe_jiggle_$game", 100) ?: 100
+
+    fun setSwipeJiggleResponse(game: String, value: Int) {
+        getSp()?.edit()?.putInt("swipe_jiggle_$game", value.coerceIn(0, 100))?.apply()
     }
 
-    // 3. Target FPS (default 120)
-    fun getTargetFps(game: String): Int =
-        getSp()?.getInt("fps_$game", 120) ?: 120
+    fun getTapStabilityRecoil(game: String): Int =
+        getSp()?.getInt("tap_stability_$game", 100) ?: 100
 
-    fun setTargetFps(game: String, fps: Int) {
-        getSp()?.edit()?.putInt("fps_$game", fps)?.apply()
+    fun setTapStabilityRecoil(game: String, value: Int) {
+        getSp()?.edit()?.putInt("tap_stability_$game", value.coerceIn(0, 100))?.apply()
     }
 
-    // 4. LOD Bias (default 3 for blurry zero-lag textures)
-    fun getLodBias(game: String): Int =
-        getSp()?.getInt("lod_bias_$game", 3) ?: 3
+    fun getResolutionStepIndex(game: String): Int =
+        getSp()?.getInt("res_step_$game", 2) ?: 2
 
-    fun setLodBias(game: String, lod: Int) {
-        getSp()?.edit()?.putInt("lod_bias_$game", lod)?.apply()
+    fun setResolutionStepIndex(game: String, step: Int) {
+        getSp()?.edit()?.putInt("res_step_$game", step.coerceIn(1, 5))?.apply()
     }
 
-    // 5. Color Filter Mode: 0 = Stock 1.0x, 1 = Vivid 1.5x, 2 = Contrast 1.25x, 3 = Scout Invert
-    fun getColorFilterMode(game: String): Int =
-        getSp()?.getInt("color_filter_$game", 1) ?: 1
+    // 4. TSOML GFX Tool Settings
+    fun getTsomlResolution(game: String): String =
+        getSp()?.getString("tsoml_res_$game", "800x600") ?: "800x600"
 
-    fun setColorFilterMode(game: String, mode: Int) {
-        getSp()?.edit()?.putInt("color_filter_$game", mode)?.apply()
+    fun setTsomlResolution(game: String, res: String) {
+        getSp()?.edit()?.putString("tsoml_res_$game", res)?.apply()
     }
 
-    fun getColorSaturationValue(game: String): Float = when (getColorFilterMode(game)) {
-        1 -> 1.5f
-        2 -> 1.25f
-        else -> 1.0f
+    fun getTsomlGraphics(game: String): String =
+        getSp()?.getString("tsoml_gfx_$game", "Super Smooth") ?: "Super Smooth"
+
+    fun setTsomlGraphics(game: String, gfx: String) {
+        getSp()?.edit()?.putString("tsoml_gfx_$game", gfx)?.apply()
     }
 
-    // 6. Driver Mode: 0 = Game Driver, 1 = System Driver (default 1 = System Driver for best hit-reg)
-    fun getDriverMode(game: String): Int =
-        getSp()?.getInt("driver_mode_$game", 1) ?: 1
+    fun getTsomlFps(game: String): Int =
+        getSp()?.getInt("tsoml_fps_$game", 120) ?: 120
 
-    fun setDriverMode(game: String, mode: Int) {
-        getSp()?.edit()?.putInt("driver_mode_$game", mode)?.apply()
+    fun setTsomlFps(game: String, fps: Int) {
+        getSp()?.edit()?.putInt("tsoml_fps_$game", fps)?.apply()
     }
 
-    // 7. Dolby Footstep Preset: 1 = Full Tep-Tep, 2 = Voice/Scout (default 2), 3 = 3D Spatial, 4 = IEM, 0 = Off
+    fun getTsomlPotatoLod(game: String): String =
+        getSp()?.getString("tsoml_potato_$game", "Ultra (LOD +3)") ?: "Ultra (LOD +3)"
+
+    fun setTsomlPotatoLod(game: String, potato: String) {
+        getSp()?.edit()?.putString("tsoml_potato_$game", potato)?.apply()
+    }
+
+    fun getTsomlBilinear(game: String): Boolean =
+        getSp()?.getBoolean("tsoml_bilinear_$game", true) ?: true
+
+    fun setTsomlBilinear(game: String, enable: Boolean) {
+        getSp()?.edit()?.putBoolean("tsoml_bilinear_$game", enable)?.apply()
+    }
+
+    fun getTsomlSimpleShader(game: String): Boolean =
+        getSp()?.getBoolean("tsoml_simple_shader_$game", true) ?: true
+
+    fun setTsomlSimpleShader(game: String, enable: Boolean) {
+        getSp()?.edit()?.putBoolean("tsoml_simple_shader_$game", enable)?.apply()
+    }
+
+    fun getTsomlDriver(game: String): String =
+        getSp()?.getString("tsoml_driver_$game", "SkiaGL + System Driver") ?: "SkiaGL + System Driver"
+
+    fun setTsomlDriver(game: String, driver: String) {
+        getSp()?.edit()?.putString("tsoml_driver_$game", driver)?.apply()
+    }
+
+    fun getTsomlSaveControls(game: String): Boolean =
+        getSp()?.getBoolean("tsoml_save_controls_$game", true) ?: true
+
+    fun setTsomlSaveControls(game: String, enable: Boolean) {
+        getSp()?.edit()?.putBoolean("tsoml_save_controls_$game", enable)?.apply()
+    }
+
+    // 5. Realme Dolby Footstep Studio & Clean Volume Boost
     fun getDolbyPreset(game: String): Int =
         getSp()?.getInt("dolby_preset_$game", 2) ?: 2
 
@@ -144,7 +159,6 @@ object AppPrefs {
         getSp()?.edit()?.putInt("dolby_preset_$game", preset)?.apply()
     }
 
-    // 8. Pure Clean Volume Percent (default 70%)
     fun getCleanVolumePercent(game: String): Int =
         getSp()?.getInt("clean_boost_pct_$game", 70) ?: 70
 
@@ -152,53 +166,10 @@ object AppPrefs {
         getSp()?.edit()?.putInt("clean_boost_pct_$game", pct.coerceIn(0, 100))?.apply()
     }
 
-    // 9. Hardware & System Toggles
     fun getSplitterGuardOn(game: String): Boolean =
         getSp()?.getBoolean("splitter_guard_$game", true) ?: true
 
     fun setSplitterGuardOn(game: String, enabled: Boolean) {
         getSp()?.edit()?.putBoolean("splitter_guard_$game", enabled)?.apply()
     }
-
-    fun getFocusDndOn(game: String): Boolean =
-        getSp()?.getBoolean("focus_dnd_$game", true) ?: true
-
-    fun setFocusDndOn(game: String, enabled: Boolean) {
-        getSp()?.edit()?.putBoolean("focus_dnd_$game", enabled)?.apply()
-    }
-
-    fun getThermalZeroOn(game: String): Boolean =
-        getSp()?.getBoolean("thermal_zero_$game", true) ?: true
-
-    fun setThermalZeroOn(game: String, enabled: Boolean) {
-        getSp()?.edit()?.putBoolean("thermal_zero_$game", enabled)?.apply()
-    }
-
-    fun getDnsMode(game: String): Int =
-        getSp()?.getInt("dns_mode_$game", 1) ?: 1
-
-    fun setDnsMode(game: String, mode: Int) {
-        getSp()?.edit()?.putInt("dns_mode_$game", mode)?.apply()
-    }
-
-    // 10. Backward-Compatibility Bridges
-    fun getDownscale(game: String): String = getEffectiveGfxConfig(game).downscale
-
-    fun setDownscale(game: String, downscale: String) {
-        getSp()?.edit()?.putString("ds_$game", downscale)?.apply()
-    }
-
-    fun getFps(game: String): Int = getTargetFps(game)
-
-    fun setFps(game: String, fps: Int) = setTargetFps(game, fps)
-
-    fun getCleanBoost(game: String): Boolean = true
-
-    fun setCleanBoost(game: String, enabled: Boolean) {
-        getSp()?.edit()?.putBoolean("clean_boost_$game", enabled)?.apply()
-    }
-
-    fun getCleanBoostPct(game: String): Int = getCleanVolumePercent(game)
-
-    fun setCleanBoostPct(game: String, pct: Int) = setCleanVolumePercent(game, pct)
 }
