@@ -201,6 +201,12 @@ object AudioTest {
     }
     fun footstepEq(on: Boolean): String = applyDolbyFootstepPreset(if (on) 1 else 0)
 
+    fun disableEffects() {
+        setCleanVolumeBoost(false, 0)
+        applyDolbyFootstepPreset(0)
+        stopSonicRadar()
+    }
+
     fun applyLaptopAudioOverdrive(
         context: Context? = null,
         enable: Boolean,
