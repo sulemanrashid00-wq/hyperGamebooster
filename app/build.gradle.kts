@@ -11,8 +11,8 @@ android {
         applicationId = "com.hypergameboost"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "13.1-EsportsPro"
+        versionCode = 17
+        versionName = "15.0-ApexSplitter120"
     }
 
     buildTypes {

@@ -136,8 +136,27 @@ object AudioTest {
             }
         }
 
-        // Shizuku hardware hooks to bypass offload & limiters on Android 16
-        Shell.runAsync("setprop persist.vendor.audio.fluence.voicecall false\nsetprop persist.vendor.audio.fluence.voicerec false\nsetprop persist.vendor.audio.fluence.speaker false\nsetprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
+        // Shizuku hardware hooks for Type-C Splitter VBUS & Audio Routing Lock
+        Shell.runAsync("""
+            settings put global usb_audio_automatic_routing_disabled 0
+            settings put secure usb_audio_automatic_routing_disabled 0
+            settings put system miui_audio_dump_enable 0
+            settings put system sound_effects_enabled 0
+            settings put system charge_boost_enable 0
+            settings put secure charge_boost_enable 0
+            settings put global adaptive_charging_enabled 1
+            settings put global audio_safe_volume_state 2
+            settings put secure audio_safe_volume_state 2
+            settings put system peak_volume_mode 1
+            settings put secure music_in_communication 1
+            settings put system dolby_enable 1
+            setprop persist.vendor.audio.fluence.voicecall false
+            setprop audio.safemedia.bypass true
+            setprop audio.offload.disable 1
+            setprop audio.deep_buffer.media false
+            setprop debug.audio.usb.period_us 2500
+            cmd media_session volume --stream 3 --set 15 2>/dev/null
+        """.trimIndent())
 
         return applyCombinedDspSafe()
     }
@@ -150,7 +169,26 @@ object AudioTest {
     @Synchronized
     fun applyDolbyFootstepPreset(presetId: Int): String {
         activePresetId = presetId.coerceIn(0, 4)
-        Shell.runAsync("setprop persist.vendor.audio.fluence.voicecall false\nsetprop persist.vendor.audio.fluence.voicerec false\nsetprop persist.vendor.audio.fluence.speaker false\nsetprop audio.offload.disable 1\nsetprop audio.deep_buffer.media false\nsettings put global audio_safe_volume_state 2\nsettings put secure music_in_communication 1\nsettings put system dolby_enable 1\ncmd media_session volume --stream 3 --set 15 2>/dev/null")
+        Shell.runAsync("""
+            settings put global usb_audio_automatic_routing_disabled 0
+            settings put secure usb_audio_automatic_routing_disabled 0
+            settings put system miui_audio_dump_enable 0
+            settings put system sound_effects_enabled 0
+            settings put system charge_boost_enable 0
+            settings put secure charge_boost_enable 0
+            settings put global adaptive_charging_enabled 1
+            settings put global audio_safe_volume_state 2
+            settings put secure audio_safe_volume_state 2
+            settings put system peak_volume_mode 1
+            settings put secure music_in_communication 1
+            settings put system dolby_enable 1
+            setprop persist.vendor.audio.fluence.voicecall false
+            setprop audio.safemedia.bypass true
+            setprop audio.offload.disable 1
+            setprop audio.deep_buffer.media false
+            setprop debug.audio.usb.period_us 2500
+            cmd media_session volume --stream 3 --set 15 2>/dev/null
+        """.trimIndent())
         return applyCombinedDspSafe()
     }
 
@@ -191,12 +229,12 @@ object AudioTest {
                             val freqHz = eq.getCenterFreq(b.toShort()) / 1000
                             val targetMb = when (activePresetId) {
                                 1 -> when {
-                                    freqHz <= 150 -> -500
+                                    freqHz <= 150 -> -600
                                     freqHz in 151..400 -> -250
                                     freqHz in 401..900 -> 150
-                                    freqHz in 901..2500 -> 450
-                                    freqHz in 2501..5000 -> 500
-                                    else -> 300
+                                    freqHz in 901..4500 -> 500
+                                    freqHz in 4501..6000 -> 400
+                                    else -> 350
                                 }
                                 2 -> when {
                                     freqHz <= 250 -> -600
@@ -212,11 +250,11 @@ object AudioTest {
                                     else -> 450
                                 }
                                 4 -> when {
-                                    freqHz <= 120 -> -600
-                                    freqHz in 121..800 -> -200
-                                    freqHz in 801..3500 -> 480
-                                    freqHz in 3501..7000 -> 350
-                                    else -> 420
+                                    freqHz <= 150 -> -600
+                                    freqHz in 151..400 -> -250
+                                    freqHz in 401..900 -> 100
+                                    freqHz in 901..4500 -> 500
+                                    else -> 350
                                 }
                                 else -> 0
                             }
@@ -230,10 +268,10 @@ object AudioTest {
                         val virt = activeVirtualizers.getOrPut(sid) { Virtualizer(1000, sid) }
                         if (virt.strengthSupported) {
                             val strength = when (activePresetId) {
-                                1 -> 550.toShort()
+                                1 -> 600.toShort()
                                 2 -> 350.toShort()
                                 3 -> 850.toShort()
-                                4 -> 400.toShort()
+                                4 -> 600.toShort()
                                 else -> 0.toShort()
                             }
                             virt.setStrength(strength)
@@ -269,7 +307,7 @@ object AudioTest {
                 1 -> "Realme Dolby Gaming (Full Tep-Tep)"
                 2 -> "Dolby Voice/Scout (Pure Footsteps)"
                 3 -> "3D Spatial Surround Radar"
-                4 -> "IEM / Headphone Hyper-Clarity"
+                4 -> "Splitter-Safe Footstep Pro / IEM"
                 else -> "OFF (Stock EQ)"
             }
             val volStatus = if (isVolumeBoostOn) "+$volumeBoostPercent% Clean Boost" else "Stock Volume"

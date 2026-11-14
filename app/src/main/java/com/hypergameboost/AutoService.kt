@@ -34,7 +34,7 @@ class AutoService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Auto Watchdog", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("HyperGameBooster v13.1 God-Tier Watchdog")
+            .setContentTitle("HyperGameBooster v15.0 Apex Watchdog")
             .setContentText("Monitoring $game (FastConnect Wi-Fi & 120 FPS Active)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
